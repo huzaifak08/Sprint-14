@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "911681711269",
+    "project_id": "sprint14-d3ab2",
+    "storage_bucket": "sprint14-d3ab2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:911681711269:android:848dba1f13725705d9f14c",
+        "android_client_info": {
+          "package_name": "com.zaifii.sprint14"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAIhqDaJetUdALuamLf0dnb9ATxoZNJZkc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:911681711269:android:c5b54e1fab523900d9f14c",
+        "android_client_info": {
+          "package_name": "com.zaifii.sprint_14"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAIhqDaJetUdALuamLf0dnb9ATxoZNJZkc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
