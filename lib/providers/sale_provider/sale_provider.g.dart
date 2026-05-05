@@ -41,7 +41,7 @@ final class SaleNotifierProvider
   }
 }
 
-String _$saleNotifierHash() => r'b730fb1e988fd04d783e3974e6c5aebb2119dac1';
+String _$saleNotifierHash() => r'488ee34ef59812c0e60e049e47786ec006986658';
 
 abstract class _$SaleNotifier extends $Notifier<List<SaleModel>> {
   List<SaleModel> build();

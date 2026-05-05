@@ -2,10 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:sprint_14/models/business_model.dart';
 import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
+import 'package:sprint_14/providers/business_provider/business_provider.dart';
+import 'package:sprint_14/providers/settings_provider/settings_provider.dart';
+import 'package:sprint_14/providers/user_provider/user_provider.dart';
 import 'package:sprint_14/views/auth/sign_in_view.dart';
 import 'package:sprint_14/views/auth/verify_email_view.dart';
+import 'package:sprint_14/views/business_views/business_dashboard_view.dart';
 import 'package:sprint_14/views/home_view.dart';
+import 'dart:developer' as dev;
 
 class SplashView extends ConsumerStatefulWidget {
   const SplashView({super.key});
@@ -19,7 +25,8 @@ class _SplashViewState extends ConsumerState<SplashView>
   late AnimationController _logoController;
   late AnimationController _textController;
   late Animation<double> _logoAnimation;
-  late Animation<double> _textAnimation;
+  late Animation<double> _textOpacity;
+  late Animation<Offset> _textSlide;
 
   @override
   void initState() {
@@ -29,62 +36,127 @@ class _SplashViewState extends ConsumerState<SplashView>
   }
 
   void _setupAnimations() {
+    // Logo scale controller
     _logoController = AnimationController(
       duration: const Duration(milliseconds: 1500),
       vsync: this,
     );
 
+    // Text fade & slide controller
     _textController = AnimationController(
-      duration: const Duration(milliseconds: 1500),
+      duration: const Duration(milliseconds: 1200),
       vsync: this,
     );
 
     _logoAnimation = CurvedAnimation(
       parent: _logoController,
-      curve: Curves.easeInOut,
-    );
-    _textAnimation = CurvedAnimation(
-      parent: _textController,
-      curve: Curves.easeInOut,
+      curve: Curves.elasticOut, // Gives that premium "pop" effect
     );
 
+    _textOpacity = CurvedAnimation(
+      parent: _textController,
+      curve: Curves.easeIn,
+    );
+
+    _textSlide = Tween<Offset>(begin: const Offset(0, 0.5), end: Offset.zero)
+        .animate(
+          CurvedAnimation(parent: _textController, curve: Curves.easeOutCubic),
+        );
+
+    // Start animations with slight stagger
     _logoController.forward();
     Future.delayed(
-      const Duration(milliseconds: 500),
+      const Duration(milliseconds: 600),
       () => _textController.forward(),
     );
   }
 
   Future<void> _handleNavigation() async {
-    // 1. Wait for animations to at least start/look good (e.g., 2.5 seconds total)
+    dev.log('🚀 Navigation sequence initiated', name: 'SplashView');
+
     await Future.delayed(const Duration(milliseconds: 2500));
 
     if (!mounted) return;
 
-    // 2. Read the current Auth State from our Provider
-    // We use ref.read here because this is a one-time navigation event
-    final authState = ref.read(authControllerProvider);
+    // 1. 🔥 FIRST: Wait for the UserProvider to be ready
+    // This ensures the BusinessNotifier has a UID when it builds.
+    dev.log('👤 Waiting for User session...', name: 'SplashView');
+    final user = await ref.read(userProvider.future);
 
-    authState.when(
-      data: (user) {
-        if (user == null) {
-          _navigate(const SignInView());
-        } else if (!user.emailVerified) {
-          _navigate(const VerifyEmailView());
-        } else {
-          _navigate(const HomeView());
-        }
-      },
-      // If Firebase is still loading or errored, default to Sign In
-      loading: () =>
-          _handleNavigation(), // Retry after a short delay if still loading
-      error: (_, _) => _navigate(const SignInView()),
+    if (user == null) {
+      dev.log(
+        '❌ No user session found. Navigating to SignInView.',
+        name: 'SplashView',
+      );
+      _navigate(const SignInView());
+      return;
+    }
+
+    // 2. 🔥 SECOND: Now that we have a user, get the businesses
+    dev.log(
+      '📦 User ready. Initializing and awaiting Business list...',
+      name: 'SplashView',
     );
+
+    try {
+      final List<BusinessModel> businessList = await ref.read(
+        businessProvider.future,
+      );
+      dev.log(
+        '✅ Business list loaded. Items found: ${businessList.length}',
+        name: 'SplashView',
+      );
+
+      final authState = ref.read(authControllerProvider);
+      final settingsAsync = ref.read(appSettingsProvider);
+
+      authState.when(
+        data: (user) {
+          // TODO: FIX THESE !!!
+          if (!user!.emailVerified) {
+            _navigate(const VerifyEmailView());
+          } else {
+            final settings = settingsAsync.value;
+            final targetId = settings?.defaultBusinessId;
+
+            if (targetId != null) {
+              final business = businessList.cast<BusinessModel?>().firstWhere(
+                (b) => b?.id == targetId,
+                orElse: () => null,
+              );
+
+              if (business != null) {
+                dev.log(
+                  '🎯 Match found: ${business.name}. Navigating to Dashboard.',
+                  name: 'SplashView',
+                );
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (context) => const HomeView()),
+                  (route) => false,
+                );
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => BusinessDashboardView(business: business),
+                  ),
+                );
+                return;
+              }
+            }
+            _navigate(const HomeView());
+          }
+        },
+        loading: () => _handleNavigation(),
+        error: (e, s) => _navigate(const SignInView()),
+      );
+    } catch (e, s) {
+      dev.log('🚨 Failed: $e', name: 'SplashView', error: e, stackTrace: s);
+      _navigate(const HomeView());
+    }
   }
 
-  void _navigate(Widget destination) {
+  void _navigate(Widget dest) {
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (context) => destination),
+      MaterialPageRoute(builder: (_) => dest),
       (route) => false,
     );
   }
@@ -98,7 +170,6 @@ class _SplashViewState extends ConsumerState<SplashView>
 
   @override
   Widget build(BuildContext context) {
-    // Optional: Keep status bar clean during splash
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(statusBarColor: Colors.transparent),
     );
@@ -120,32 +191,32 @@ class _SplashViewState extends ConsumerState<SplashView>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            // RESTORED: Animated Logo with Scale & Shadow
             ScaleTransition(
               scale: _logoAnimation,
               child: Container(
-                width: 150,
-                height: 150,
+                width: 140,
+                height: 140,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.2),
-                      blurRadius: 20,
-                      spreadRadius: 5,
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 30,
+                      spreadRadius: 10,
                     ),
                   ],
                 ),
                 child: SvgPicture.asset("assets/images/logo.svg"),
               ),
             ),
-            const SizedBox(height: 60),
+            const SizedBox(height: 50),
+
+            // RESTORED: Animated Text (Fade + Slide)
             FadeTransition(
-              opacity: _textAnimation,
+              opacity: _textOpacity,
               child: SlideTransition(
-                position: Tween<Offset>(
-                  begin: const Offset(0, 0.3),
-                  end: Offset.zero,
-                ).animate(_textController),
+                position: _textSlide,
                 child: Column(
                   children: [
                     Text(
@@ -153,26 +224,33 @@ class _SplashViewState extends ConsumerState<SplashView>
                       style: Theme.of(context).textTheme.headlineLarge
                           ?.copyWith(
                             color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 2,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 3,
                           ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
                     const Text(
-                      'Securely synchronizing...',
-                      style: TextStyle(color: Colors.white70),
+                      'SECURE RETAIL ENGINE',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.5,
+                        fontSize: 12,
+                      ),
                     ),
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 80),
+
+            // Subtle loading indicator
             const SizedBox(
-              width: 30,
-              height: 30,
+              width: 24,
+              height: 24,
               child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
-                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white38),
+                strokeWidth: 2.5,
               ),
             ),
           ],

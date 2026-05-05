@@ -6,7 +6,7 @@ import 'package:sprint_14/cache/init_cache.dart';
 import 'package:sprint_14/helpers/app_data.dart';
 import 'package:sprint_14/helpers/theme.dart';
 import 'package:sprint_14/providers/app_provider_container.dart';
-import 'package:sprint_14/providers/theme_provider/theme_provider.dart';
+import 'package:sprint_14/providers/settings_provider/settings_provider.dart';
 import 'package:sprint_14/services/routes_service.dart';
 
 @pragma('vm:entry-point')
@@ -40,16 +40,26 @@ class MyApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final themeProvider = ref.watch(themeNotifier);
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      navigatorKey: AppData.shared.navigatorKey,
-      title: 'Sprint14',
-      theme: lightTheme,
-      darkTheme: darkTheme,
-      themeMode: themeProvider.themeMode,
-      initialRoute: RouteName.splashView,
-      onGenerateRoute: Routes.generateRoute,
+    final settings = ref.watch(appSettingsProvider);
+    return settings.when(
+      data: (config) {
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          navigatorKey: AppData.shared.navigatorKey,
+          title: 'Sprint14',
+          theme: lightTheme,
+          darkTheme: darkTheme,
+          themeMode: config.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+          initialRoute: RouteName.splashView,
+          onGenerateRoute: Routes.generateRoute,
+        );
+      },
+      loading: () => const MaterialApp(
+        home: Scaffold(body: Center(child: CircularProgressIndicator())),
+      ),
+      error: (err, stack) => MaterialApp(
+        home: Scaffold(body: Center(child: Text("Init Error: $err"))),
+      ),
     );
   }
 }

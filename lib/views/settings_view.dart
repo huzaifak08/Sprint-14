@@ -6,10 +6,12 @@ import 'package:sprint_14/models/user_model.dart';
 import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
 import 'package:sprint_14/providers/biometric_provider/biometric_provider.dart';
 import 'package:sprint_14/providers/ledger_provider/ledger_provider.dart';
-import 'package:sprint_14/providers/theme_provider/theme_provider.dart';
+import 'package:sprint_14/providers/business_provider/business_provider.dart';
+import 'package:sprint_14/providers/settings_provider/settings_provider.dart';
 import 'package:sprint_14/providers/user_provider/user_provider.dart';
 import 'package:sprint_14/views/auth/sign_in_view.dart';
 import 'package:sprint_14/views/profile_view.dart';
+import 'dart:developer' as dev;
 
 class SettingsView extends ConsumerWidget {
   const SettingsView({super.key});
@@ -17,16 +19,19 @@ class SettingsView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final themeState = ref.watch(themeNotifier);
 
-    // 1. Watch Security State (Biometrics)
+    // Watchers for Real-time UI updates
+    final appSettings = ref.watch(appSettingsProvider);
+    final businesses = ref.watch(businessProvider);
+
+    // Watch securityState to ensure the UI reacts to biometric changes
     final securityState = ref.watch(securityProvider);
     final securityNotifier = ref.read(securityProvider.notifier);
 
-    // 2. Watch User Data directly from UserNotifier (Cache + Firestore)
     final userState = ref.watch(userProvider);
 
     return Scaffold(
+      backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
         title: const Text("Settings"),
         centerTitle: true,
@@ -36,67 +41,114 @@ class SettingsView extends ConsumerWidget {
       ),
       body: RefreshIndicator(
         onRefresh: () => ref.read(userProvider.notifier).syncPendingUser(),
-        child: ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          children: [
-            // --- ACCOUNT SECTION ---
-            _buildSectionHeader(theme, "Account"),
-            userState.when(
-              data: (user) => _buildProfileCard(context, theme, user),
-              loading: () => _buildLoadingCard(theme),
-              error: (err, stack) =>
-                  _buildErrorCard(theme, "Profile unavailable"),
-            ),
-            const SizedBox(height: 24),
-
-            // --- APPEARANCE SECTION ---
-            _buildSectionHeader(theme, "Appearance"),
-            _buildSettingTile(
-              theme,
-              icon: Icons.dark_mode_outlined,
-              title: "Dark Mode",
-              subtitle: "Switch between light and dark themes",
-              trailing: Switch(
-                value: themeState.themeMode == ThemeMode.dark,
-                activeThumbColor: theme.colorScheme.primary,
-                onChanged: (val) {
-                  ref
-                      .read(themeNotifier.notifier)
-                      .setThemeMode(val ? ThemeMode.dark : ThemeMode.light);
-                },
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // --- SECURITY SECTION ---
-            _buildSectionHeader(theme, "Security"),
-            securityState.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (err, stack) => _buildErrorCard(theme, "Biometrics error"),
-              data: (_) => _buildSettingTile(
-                theme,
-                icon: Icons.fingerprint_rounded,
-                title: "Biometric Lock",
-                subtitle: "Protect your data with fingerprint",
-                trailing: Switch(
-                  value: securityNotifier.isSecurityEnabled,
-                  activeThumbColor: theme.colorScheme.primary,
-                  onChanged: (val) async {
-                    await securityNotifier.toggleBiometrics(val);
-                  },
+        child: appSettings.when(
+          data: (settings) {
+            dev.log(
+              settings.defaultBusinessId ?? "No Business Id",
+              name: "Settings View",
+            );
+            return ListView(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              children: [
+                // --- ACCOUNT SECTION ---
+                _buildSectionHeader(theme, "Account"),
+                userState.when(
+                  data: (user) => _buildProfileCard(context, theme, user),
+                  loading: () => _buildLoadingCard(theme),
+                  error: (err, stack) =>
+                      _buildErrorCard(theme, "Profile unavailable"),
                 ),
-              ),
-            ),
+                const SizedBox(height: 24),
 
-            const SizedBox(height: 40),
+                // --- APPEARANCE SECTION ---
+                _buildSectionHeader(theme, "Appearance"),
+                _buildSettingTile(
+                  theme,
+                  icon: Icons.dark_mode_outlined,
+                  title: "Dark Mode",
+                  subtitle: "Toggle between high-contrast themes",
+                  trailing: Switch(
+                    value: settings.isDarkMode,
+                    activeThumbColor: theme.colorScheme.primary,
+                    onChanged: (val) =>
+                        ref.read(appSettingsProvider.notifier).updateTheme(val),
+                  ),
+                ),
+                const SizedBox(height: 24),
 
-            // --- LOGOUT SECTION ---
-            _buildLogoutButton(context, ref, theme),
+                // --- WORKFLOW SECTION ---
+                _buildSectionHeader(theme, "Workflow"),
+                businesses.when(
+                  data: (bus) {
+                    return _buildSettingTile(
+                      theme,
+                      icon: Icons.rocket_launch_outlined,
+                      title: "Landing Page",
+                      subtitle: "Direct access to your primary shop",
+                      trailing: DropdownButton<String?>(
+                        value:
+                            bus.any((b) => b.id == settings.defaultBusinessId)
+                            ? settings.defaultBusinessId
+                            : null,
+                        underline: const SizedBox(),
+                        icon: Icon(
+                          Icons.arrow_drop_down,
+                          color: theme.colorScheme.primary,
+                        ),
+                        onChanged: (val) => ref
+                            .read(appSettingsProvider.notifier)
+                            .updateLandingPage(val),
+                        items: [
+                          const DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text("Default Home"),
+                          ),
+                          ...bus.map(
+                            (b) => DropdownMenuItem<String?>(
+                              value: b.id,
+                              child: Text(b.name),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
+                  error: (err, stack) => Center(child: Text("Error: $err")),
+                ),
+                const SizedBox(height: 24),
 
-            const SizedBox(height: 32),
-            _buildVersionInfo(theme),
-          ],
+                // --- SECURITY SECTION ---
+                _buildSectionHeader(theme, "Security"),
+                securityState.when(
+                  data: (isAuthenticated) => _buildSettingTile(
+                    theme,
+                    icon: Icons.fingerprint_rounded,
+                    title: "Biometric Lock",
+                    subtitle: "Protect your data with fingerprint",
+                    trailing: Switch(
+                      // Check the persistent preference from the notifier
+                      value: securityNotifier.isSecurityEnabled,
+                      activeThumbColor: theme.colorScheme.primary,
+                      onChanged: (val) =>
+                          securityNotifier.toggleBiometrics(val),
+                    ),
+                  ),
+                  loading: () => _buildLoadingCard(theme),
+                  error: (e, s) => _buildErrorCard(theme, "Security Error"),
+                ),
+                const SizedBox(height: 40),
+
+                // --- LOGOUT SECTION ---
+                _buildLogoutButton(context, ref, theme),
+                const SizedBox(height: 32),
+                _buildVersionInfo(theme),
+              ],
+            );
+          },
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, _) => _buildErrorCard(theme, "Error loading settings"),
         ),
       ),
     );
@@ -125,7 +177,7 @@ class SettingsView extends ConsumerWidget {
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: theme.colorScheme.primary.withValues(alpha: 0.3),
+              color: theme.colorScheme.primary.withOpacity(0.3),
               blurRadius: 15,
               offset: const Offset(0, 8),
             ),
@@ -164,22 +216,13 @@ class SettingsView extends ConsumerWidget {
                   Text(
                     user?.email ?? "No email linked",
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.85),
+                      color: Colors.white.withOpacity(0.85),
                       fontSize: 14,
                     ),
                   ),
                 ],
               ),
             ),
-            if (user != null && !user.isSynced)
-              const Padding(
-                padding: EdgeInsets.only(right: 8),
-                child: Icon(
-                  Icons.cloud_off_rounded,
-                  color: Colors.white70,
-                  size: 20,
-                ),
-              ),
             const Icon(
               Icons.arrow_forward_ios_rounded,
               color: Colors.white,
@@ -200,7 +243,7 @@ class SettingsView extends ConsumerWidget {
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+        color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
         borderRadius: BorderRadius.circular(20),
       ),
       child: ListTile(
@@ -235,7 +278,7 @@ class SettingsView extends ConsumerWidget {
     return SizedBox(
       width: double.infinity,
       child: OutlinedButton.icon(
-        onPressed: () => _handleLogout(context, ref),
+        onPressed: () => _handleLogout(context, ref, theme),
         icon: const Icon(Icons.logout_rounded),
         label: const Text(
           "LOGOUT ACCOUNT",
@@ -243,9 +286,7 @@ class SettingsView extends ConsumerWidget {
         ),
         style: OutlinedButton.styleFrom(
           foregroundColor: theme.colorScheme.error,
-          side: BorderSide(
-            color: theme.colorScheme.error.withValues(alpha: 0.5),
-          ),
+          side: BorderSide(color: theme.colorScheme.error.withOpacity(0.5)),
           padding: const EdgeInsets.symmetric(vertical: 18),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
@@ -255,14 +296,12 @@ class SettingsView extends ConsumerWidget {
     );
   }
 
-  void _handleLogout(BuildContext context, WidgetRef ref) {
+  void _handleLogout(BuildContext context, WidgetRef ref, ThemeData theme) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Logout"),
-        content: const Text(
-          "Are you sure you want to sign out? Local cache will be preserved.",
-        ),
+        content: const Text("Are you sure? Local cache will be preserved."),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -270,23 +309,11 @@ class SettingsView extends ConsumerWidget {
           ),
           ElevatedButton(
             onPressed: () async {
-              // 1. Clear the Singleton
-
-              // 2. Clear Local SQLite Cache (Crucial for security)
               await UserTable.clearAllUsers();
-              // await ProjectTable.deleteAllProjects();
               await LedgerTable.deleteAllLedgers();
-
-              // 3. Invalidate Providers (This resets their state to default/loading)
-              // This will trigger the build() methods to run again and see 'null' user
               ref.invalidate(userProvider);
-              // ref.invalidate(projectNotifierProvider);
               ref.invalidate(ledgerProvider);
-
-              // 4. Perform Firebase Logout
               await ref.read(authControllerProvider.notifier).logout();
-
-              // 5. Navigate to Sign In
               if (context.mounted) {
                 Navigator.pushAndRemoveUntil(
                   context,
@@ -296,9 +323,9 @@ class SettingsView extends ConsumerWidget {
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
+              backgroundColor: theme.colorScheme.error,
             ),
-            child: const Text("Logout"),
+            child: const Text("Logout", style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -309,7 +336,7 @@ class SettingsView extends ConsumerWidget {
     return Container(
       height: 100,
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+        color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
         borderRadius: BorderRadius.circular(24),
       ),
       child: const Center(child: CircularProgressIndicator()),
@@ -330,7 +357,7 @@ class SettingsView extends ConsumerWidget {
       child: Text(
         "Sprint14 v1.0.2 • Secure Build",
         style: theme.textTheme.bodySmall?.copyWith(
-          color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+          color: theme.colorScheme.onSurface.withOpacity(0.3),
         ),
       ),
     );

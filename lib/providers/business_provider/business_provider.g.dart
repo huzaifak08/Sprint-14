@@ -13,7 +13,7 @@ part of 'business_provider.dart';
 final businessProvider = BusinessNotifierProvider._();
 
 final class BusinessNotifierProvider
-    extends $NotifierProvider<BusinessNotifier, List<BusinessModel>> {
+    extends $AsyncNotifierProvider<BusinessNotifier, List<BusinessModel>> {
   BusinessNotifierProvider._()
     : super(
         from: null,
@@ -31,29 +31,22 @@ final class BusinessNotifierProvider
   @$internal
   @override
   BusinessNotifier create() => BusinessNotifier();
-
-  /// {@macro riverpod.override_with_value}
-  Override overrideWithValue(List<BusinessModel> value) {
-    return $ProviderOverride(
-      origin: this,
-      providerOverride: $SyncValueProvider<List<BusinessModel>>(value),
-    );
-  }
 }
 
-String _$businessNotifierHash() => r'0bc797bf52c00579d6b10d7a5a73fd93d2612130';
+String _$businessNotifierHash() => r'825fe57600f9a08a2f0bc90d300c0a3dfd05c411';
 
-abstract class _$BusinessNotifier extends $Notifier<List<BusinessModel>> {
-  List<BusinessModel> build();
+abstract class _$BusinessNotifier extends $AsyncNotifier<List<BusinessModel>> {
+  FutureOr<List<BusinessModel>> build();
   @$mustCallSuper
   @override
   void runBuild() {
-    final ref = this.ref as $Ref<List<BusinessModel>, List<BusinessModel>>;
+    final ref =
+        this.ref as $Ref<AsyncValue<List<BusinessModel>>, List<BusinessModel>>;
     final element =
         ref.element
             as $ClassProviderElement<
-              AnyNotifier<List<BusinessModel>, List<BusinessModel>>,
-              List<BusinessModel>,
+              AnyNotifier<AsyncValue<List<BusinessModel>>, List<BusinessModel>>,
+              AsyncValue<List<BusinessModel>>,
               Object?,
               Object?
             >;

@@ -22,16 +22,22 @@ class BusinessView extends ConsumerWidget {
           ),
         ],
       ),
-      body: businesses.isEmpty
-          ? _buildEmptyState(context, ref)
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: businesses.length,
-              itemBuilder: (context, index) {
-                final business = businesses[index];
-                return _BusinessCard(business: business);
-              },
-            ),
+      body: businesses.when(
+        data: (bus) {
+          if (bus.isEmpty) _buildEmptyState(context, ref);
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: bus.length,
+            itemBuilder: (context, index) {
+              final business = bus[index];
+              return _BusinessCard(business: business);
+            },
+          );
+        },
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (err, stack) => Center(child: Text("Error: $err")),
+      ),
     );
   }
 

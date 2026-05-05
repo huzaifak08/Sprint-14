@@ -3,6 +3,7 @@ import 'package:sprint_14/cache/tables/business_table.dart';
 import 'package:sprint_14/cache/tables/ledger_table.dart';
 import 'package:sprint_14/cache/tables/product_table.dart';
 import 'package:sprint_14/cache/tables/sale_table.dart';
+import 'package:sprint_14/cache/tables/settings_table.dart';
 import 'package:sprint_14/cache/tables/user_table.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
@@ -34,12 +35,14 @@ class LocalCacheManager {
         await BusinessTable.createTable(db);
         await ProductTable.createTable(db);
         await SaleTable.createTable(db);
+        await SettingsTable.createTable(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 3) {
           await BusinessTable.createTable(db);
           await ProductTable.createTable(db);
           await SaleTable.createTable(db);
+          await SettingsTable.createTable(db);
         }
       },
     );

@@ -10,41 +10,46 @@ part 'business_provider.g.dart';
 
 @Riverpod(keepAlive: true)
 class BusinessNotifier extends _$BusinessNotifier {
-  String? get _currentUid => ref.read(userProvider).value?.uid;
-
   @override
-  List<BusinessModel> build() {
+  Future<List<BusinessModel>> build() async {
+    // 🔥 Watch the user state. If user changes, build() re-runs.
     final userState = ref.watch(userProvider);
+    final user = userState.value;
 
-    userState.whenData((user) {
-      if (user != null) {
-        _loadBusinesses(user.uid);
-      } else {
-        state = [];
-      }
-    });
+    if (user == null) {
+      dev.log(
+        "No user found in BusinessNotifier, returning empty list",
+        name: "BusinessProvider",
+      );
+      return [];
+    }
 
-    return [];
+    // Load initial data from local cache immediately for fast UI response
+    final cache = await BusinessTable.getAllBusinessesFromCache();
+
+    // Trigger background sync/cloud fetch without blocking the UI return
+    _fetchAndSyncFromCloud(user.uid);
+
+    return cache;
   }
 
-  /// 1. Load: Cache -> Cloud -> Merge
-  Future<void> _loadBusinesses(String uid) async {
-    final cache = await BusinessTable.getAllBusinessesFromCache();
-    if (cache.isNotEmpty) state = cache;
-
+  /// 1. Cloud Fetch & Merge (Silent background update)
+  Future<void> _fetchAndSyncFromCloud(String uid) async {
     try {
       final service = BusinessService(uid: uid);
       final cloud = await service.getAllBusinesses();
+      final currentList = state.value ?? [];
 
-      if (cloud.isEmpty && cache.isEmpty) return;
+      if (cloud.isEmpty && currentList.isEmpty) return;
 
-      final Map<String, BusinessModel> cacheMap = {
-        for (final b in cache) b.id: b,
+      final Map<String, BusinessModel> currentMap = {
+        for (final b in currentList) b.id: b,
       };
-      final List<BusinessModel> merged = [];
 
+      final List<BusinessModel> merged = [];
       for (final c in cloud) {
-        final local = cacheMap[c.id];
+        final local = currentMap[c.id];
+        // If local exists and is not synced, keep local. Otherwise take cloud version.
         if (local != null && !local.isSynced) {
           merged.add(local);
         } else {
@@ -53,10 +58,10 @@ class BusinessNotifier extends _$BusinessNotifier {
       }
 
       await BusinessTable.saveAllFetchedBusinesses(merged);
-      state = merged;
+      state = AsyncData(merged);
       syncPending();
     } catch (e) {
-      dev.log("Business Load Error: $e");
+      dev.log("Cloud Fetch Error: $e", name: "BusinessProvider");
     }
   }
 
@@ -64,40 +69,56 @@ class BusinessNotifier extends _$BusinessNotifier {
   Future<void> addBusiness(BusinessModel business) async {
     final local = business.copyWith(isSynced: false, isDeleted: false);
     await BusinessTable.saveSingleBusiness(local);
-    state = [local, ...state];
+
+    final current = state.value ?? [];
+    state = AsyncData([local, ...current]);
     syncPending();
   }
 
   /// 3. Update Business
   Future<void> updateBusiness(BusinessModel updated) async {
     final local = updated.copyWith(isSynced: false);
-    state = [
-      for (final b in state)
+    final current = state.value ?? [];
+
+    state = AsyncData([
+      for (final b in current)
         if (b.id == local.id) local else b,
-    ];
+    ]);
+
     await BusinessTable.saveSingleBusiness(local);
     syncPending();
   }
 
   /// 4. Delete Business (Soft Delete)
   Future<void> deleteBusiness(String id) async {
-    final business = state.firstWhere((b) => b.id == id);
+    final current = state.value ?? [];
+    final business = current.firstWhere((b) => b.id == id);
     final deletedMarker = business.copyWith(isDeleted: true, isSynced: false);
 
-    state = state.where((b) => b.id != id).toList();
+    state = AsyncData(current.where((b) => b.id != id).toList());
     await BusinessTable.saveSingleBusiness(deletedMarker);
     syncPending();
   }
 
-  /// 5. Background Sync
+  /// 5. Manual Sync Trigger (Useful for Splash)
+  Future<List<BusinessModel>> forceRefresh() async {
+    final user = ref.read(userProvider).value;
+    if (user == null) return [];
+
+    final businesses = await BusinessTable.getAllBusinessesFromCache();
+    state = AsyncData(businesses);
+    return businesses;
+  }
+
+  /// 6. Background Sync Logic
   Future<void> syncPending() async {
-    final uid = _currentUid;
-    if (uid == null) return;
+    final user = ref.read(userProvider).value;
+    if (user == null) return;
 
     final connectivity = await Connectivity().checkConnectivity();
     if (connectivity.contains(ConnectivityResult.none)) return;
 
-    final service = BusinessService(uid: uid);
+    final service = BusinessService(uid: user.uid);
     final unsynced = await BusinessTable.getUnsyncedBusinesses();
 
     for (final b in unsynced) {
@@ -113,14 +134,16 @@ class BusinessNotifier extends _$BusinessNotifier {
               lastSyncAttempt: DateTime.now(),
             );
             await BusinessTable.saveSingleBusiness(synced);
-            state = [
-              for (final item in state)
+
+            final current = state.value ?? [];
+            state = AsyncData([
+              for (final item in current)
                 if (item.id == synced.id) synced else item,
-            ];
+            ]);
           }
         }
       } catch (e) {
-        dev.log("Business Sync Failed: $e");
+        dev.log("Sync Failed for ${b.id}: $e", name: "BusinessProvider");
       }
     }
   }
