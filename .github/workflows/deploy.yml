@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,7 +26,8 @@ jobs:
           channel: "stable"
 
       - name: Decode Keystore
-        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/upload-keystore.jks
+        # -di ignores wraps and non-alphabet characters to prevent "invalid input"
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -di > android/app/upload-keystore.jks
 
       - name: Install Dependencies
         run: flutter pub get
@@ -38,19 +39,19 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          # Offsetting build number from your current 2. 
-          # This ensures the first CI run is 3 or higher.
-          BUILD_NUMBER=$((RUN_NUMBER + 2))
+          # Math performed inside the shell script to avoid YAML syntax issues
+          # If your current Play Store build is 2, this makes the next one 22
+          BUILD_NUMBER=$((RUN_NUMBER + 20))
 
-          # 1. Build App Bundle for Play Store
+          # Build App Bundle for Play Store
           flutter build appbundle --release \
-          --build-name=0.0.2 \
-          --build-number=$BUILD_NUMBER
+            --build-name=0.0.2 \
+            --build-number=$BUILD_NUMBER
 
-          # 2. Build APK for GitHub Release
+          # Build APK for GitHub Release
           flutter build apk --release \
-          --build-name=0.0.2 \
-          --build-number=$BUILD_NUMBER
+            --build-name=0.0.2 \
+            --build-number=$BUILD_NUMBER
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -59,7 +60,7 @@ jobs:
             build/app/outputs/bundle/release/app-release.aab
             build/app/outputs/flutter-apk/app-release.apk
           tag_name: v0.0.2-b${{ github.run_number }}
-          name: Sprint 14 Release v0.0.2 (Build ${{ github.run_number }})
+          name: Sprint 14 v0.0.2 (Build ${{ github.run_number }})
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
