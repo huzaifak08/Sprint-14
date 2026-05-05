@@ -58,7 +58,7 @@ class SettingsView extends ConsumerWidget {
               subtitle: "Switch between light and dark themes",
               trailing: Switch(
                 value: themeState.themeMode == ThemeMode.dark,
-                activeColor: theme.colorScheme.primary,
+                activeThumbColor: theme.colorScheme.primary,
                 onChanged: (val) {
                   ref
                       .read(themeNotifier.notifier)
@@ -81,7 +81,7 @@ class SettingsView extends ConsumerWidget {
                 subtitle: "Protect your data with fingerprint",
                 trailing: Switch(
                   value: securityNotifier.isSecurityEnabled,
-                  activeColor: theme.colorScheme.primary,
+                  activeThumbColor: theme.colorScheme.primary,
                   onChanged: (val) async {
                     await securityNotifier.toggleBiometrics(val);
                   },
@@ -125,7 +125,7 @@ class SettingsView extends ConsumerWidget {
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: theme.colorScheme.primary.withOpacity(0.3),
+              color: theme.colorScheme.primary.withValues(alpha: 0.3),
               blurRadius: 15,
               offset: const Offset(0, 8),
             ),
@@ -164,7 +164,7 @@ class SettingsView extends ConsumerWidget {
                   Text(
                     user?.email ?? "No email linked",
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.85),
+                      color: Colors.white.withValues(alpha: 0.85),
                       fontSize: 14,
                     ),
                   ),
@@ -200,7 +200,7 @@ class SettingsView extends ConsumerWidget {
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(20),
       ),
       child: ListTile(
@@ -243,7 +243,9 @@ class SettingsView extends ConsumerWidget {
         ),
         style: OutlinedButton.styleFrom(
           foregroundColor: theme.colorScheme.error,
-          side: BorderSide(color: theme.colorScheme.error.withOpacity(0.5)),
+          side: BorderSide(
+            color: theme.colorScheme.error.withValues(alpha: 0.5),
+          ),
           padding: const EdgeInsets.symmetric(vertical: 18),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
@@ -307,7 +309,7 @@ class SettingsView extends ConsumerWidget {
     return Container(
       height: 100,
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(24),
       ),
       child: const Center(child: CircularProgressIndicator()),
@@ -328,7 +330,7 @@ class SettingsView extends ConsumerWidget {
       child: Text(
         "Sprint14 v1.0.2 • Secure Build",
         style: theme.textTheme.bodySmall?.copyWith(
-          color: theme.colorScheme.onSurface.withOpacity(0.3),
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
         ),
       ),
     );

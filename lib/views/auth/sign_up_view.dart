@@ -92,7 +92,7 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              theme.colorScheme.primary.withOpacity(0.05),
+              theme.colorScheme.primary.withValues(alpha: 0.05),
               theme.scaffoldBackgroundColor,
             ],
           ),
@@ -129,8 +129,8 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
                               "Join Sprint14 to manage your daily life",
                               style: theme.textTheme.bodyMedium?.copyWith(
                                 fontSize: 13,
-                                color: theme.colorScheme.onSurface.withOpacity(
-                                  0.6,
+                                color: theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.6,
                                 ),
                               ),
                               softWrap: true,
@@ -302,7 +302,7 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide(
-            color: Theme.of(context).dividerColor.withOpacity(0.1),
+            color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
           ),
         ),
         focusedBorder: OutlineInputBorder(

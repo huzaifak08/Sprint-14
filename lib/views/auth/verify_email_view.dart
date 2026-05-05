@@ -77,7 +77,7 @@ class _VerifyEmailViewState extends ConsumerState<VerifyEmailView> {
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withOpacity(0.1),
+                  color: theme.colorScheme.primary.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
@@ -98,7 +98,7 @@ class _VerifyEmailViewState extends ConsumerState<VerifyEmailView> {
                 "We've sent a verification link to your email address. Please click the link to secure your account.",
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurface.withOpacity(0.7),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                   height: 1.5,
                 ),
               ),
@@ -108,9 +108,11 @@ class _VerifyEmailViewState extends ConsumerState<VerifyEmailView> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.amber.withOpacity(0.1),
+                  color: Colors.amber.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                  border: Border.all(
+                    color: Colors.amber.withValues(alpha: 0.3),
+                  ),
                 ),
                 child: Row(
                   children: [
@@ -182,7 +184,9 @@ class _VerifyEmailViewState extends ConsumerState<VerifyEmailView> {
                 icon: const Icon(Icons.logout_rounded, size: 18),
                 label: const Text("Use a different email"),
                 style: TextButton.styleFrom(
-                  foregroundColor: theme.colorScheme.onSurface.withOpacity(0.5),
+                  foregroundColor: theme.colorScheme.onSurface.withValues(
+                    alpha: 0.5,
+                  ),
                 ),
               ),
             ],

@@ -319,10 +319,10 @@ class _HeaderSection extends ConsumerWidget {
         style: const TextStyle(fontSize: 16),
         decoration: InputDecoration(
           hintText: "Search transactions...",
-          hintStyle: TextStyle(color: Colors.grey.withOpacity(0.7)),
+          hintStyle: TextStyle(color: Colors.grey.withValues(alpha: 0.7)),
           prefixIcon: Icon(
             Icons.search_rounded,
-            color: Theme.of(context).colorScheme.primary.withOpacity(0.6),
+            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.6),
           ),
           suffixIcon: IconButton(
             icon: const Icon(Icons.close_rounded, size: 20),
@@ -331,7 +331,7 @@ class _HeaderSection extends ConsumerWidget {
           filled: true,
           fillColor: Theme.of(
             context,
-          ).colorScheme.surfaceVariant.withOpacity(0.3),
+          ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 16,
             vertical: 12,
@@ -347,7 +347,9 @@ class _HeaderSection extends ConsumerWidget {
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide(
-              color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+              color: Theme.of(
+                context,
+              ).colorScheme.primary.withValues(alpha: 0.5),
               width: 1.5,
             ),
           ),
@@ -356,7 +358,7 @@ class _HeaderSection extends ConsumerWidget {
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide(
-              color: Colors.grey.withOpacity(0.1),
+              color: Colors.grey.withValues(alpha: 0.1),
               width: 1,
             ),
           ),
@@ -503,13 +505,13 @@ class _EmptyLedgerState extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(30),
               decoration: BoxDecoration(
-                color: theme.colorScheme.primary.withOpacity(0.05),
+                color: theme.colorScheme.primary.withValues(alpha: 0.05),
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 Icons.account_balance_wallet_outlined,
                 size: 80,
-                color: theme.colorScheme.primary.withOpacity(0.4),
+                color: theme.colorScheme.primary.withValues(alpha: 0.4),
               ),
             ),
             const SizedBox(height: 24),

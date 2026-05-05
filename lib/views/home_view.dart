@@ -121,7 +121,7 @@ class _HomeViewState extends ConsumerState<HomeView>
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              appTheme.colorScheme.primary.withOpacity(0.05),
+              appTheme.colorScheme.primary.withValues(alpha: 0.05),
               appTheme.scaffoldBackgroundColor,
             ],
           ),
@@ -137,7 +137,7 @@ class _HomeViewState extends ConsumerState<HomeView>
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: appTheme.colorScheme.primary.withOpacity(0.1),
+                color: appTheme.colorScheme.primary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: Icon(
@@ -158,7 +158,9 @@ class _HomeViewState extends ConsumerState<HomeView>
             Text(
               "Please authenticate to access your data",
               style: appTheme.textTheme.bodyMedium?.copyWith(
-                color: appTheme.textTheme.bodyMedium?.color?.withOpacity(0.6),
+                color: appTheme.textTheme.bodyMedium?.color?.withValues(
+                  alpha: 0.6,
+                ),
               ),
             ),
             const SizedBox(height: 60),

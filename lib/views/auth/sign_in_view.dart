@@ -87,7 +87,7 @@ class _SignInViewState extends ConsumerState<SignInView> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              theme.colorScheme.primary.withOpacity(0.05),
+              theme.colorScheme.primary.withValues(alpha: 0.05),
               theme.scaffoldBackgroundColor,
             ],
           ),
@@ -120,8 +120,8 @@ class _SignInViewState extends ConsumerState<SignInView> {
                               "Sign in to continue your progress",
                               style: theme.textTheme.bodyMedium?.copyWith(
                                 fontSize: 13,
-                                color: theme.colorScheme.onSurface.withOpacity(
-                                  0.6,
+                                color: theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.6,
                                 ),
                               ),
                             ),
@@ -319,7 +319,7 @@ class _SignInViewState extends ConsumerState<SignInView> {
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide(
-            color: Theme.of(context).dividerColor.withOpacity(0.1),
+            color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
           ),
         ),
         focusedBorder: OutlineInputBorder(
