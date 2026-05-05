@@ -10,6 +10,7 @@ import 'package:sprint_14/providers/biometric_provider/biometric_provider.dart';
 import 'package:sprint_14/providers/ledger_provider/ledger_provider.dart';
 import 'package:sprint_14/services/biometric_service.dart';
 import 'package:sprint_14/views/add_or_update_ledger_view.dart';
+import 'package:sprint_14/views/business_views/business_view.dart';
 import 'package:sprint_14/views/ledger_view/ledger_view.dart';
 import 'package:sprint_14/views/reminders_view.dart';
 import 'package:sprint_14/views/settings_view.dart';
@@ -211,7 +212,7 @@ class _HomeViewState extends ConsumerState<HomeView>
       body: PageView(
         controller: _pageController,
         onPageChanged: (index) => setState(() => selectedView = index),
-        children: const [HomeScreen(), LedgerView()],
+        children: const [HomeScreen(), LedgerView(), BusinessView()],
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: appTheme.colorScheme.primary,
@@ -242,6 +243,11 @@ class _HomeViewState extends ConsumerState<HomeView>
               value: 1,
               label: Text("Ledger"),
               icon: Icon(Icons.account_balance_wallet_rounded),
+            ),
+            ButtonSegment(
+              value: 2,
+              label: Text("Business"),
+              icon: Icon(Icons.business),
             ),
           ],
           selected: {selectedView},

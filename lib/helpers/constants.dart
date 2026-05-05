@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 final String usersCollection = "users";
 final String projectsCollection = "projects";
 final String ledgersCollection = "ledgers";
+final String businessesCollection = "businesses";
+final String productsCollection = "products";
+final String salesCollection = "sales";
 
 final String themeKey = "sprint-14-theme";
 
