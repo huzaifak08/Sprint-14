@@ -76,4 +76,9 @@ class BusinessTable {
     final db = await LocalCacheManager.getDatabase();
     await db.delete(tableName, where: 'id = ?', whereArgs: [id]);
   }
+
+  static Future<void> deleteAllBusinesses() async {
+    final db = await LocalCacheManager.getDatabase();
+    await db.delete(tableName);
+  }
 }

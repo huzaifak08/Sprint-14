@@ -29,4 +29,9 @@ class SettingsTable {
     if (maps.isEmpty) return AppSettingsModel();
     return AppSettingsModel.fromJsonDb(maps.first);
   }
+
+  static Future<void> deleteAllSettings() async {
+    final db = await LocalCacheManager.getDatabase();
+    await db.delete(tableName);
+  }
 }

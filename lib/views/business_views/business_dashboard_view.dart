@@ -2,12 +2,78 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sprint_14/models/business_model.dart';
 import 'package:sprint_14/models/sale_model.dart';
+import 'package:sprint_14/models/product_model.dart';
 import 'package:sprint_14/providers/business_provider/business_provider.dart';
 import 'package:sprint_14/providers/product_provider/product_provider.dart';
 import 'package:sprint_14/providers/sale_provider/sale_provider.dart';
-import 'package:sprint_14/views/business_views/add_sale_view.dart';
 import 'package:sprint_14/views/business_views/manage_products_view.dart';
+import 'package:sprint_14/views/business_views/add_update_sale_view.dart';
 
+// --- SHARED CATEGORY SELECTOR WIDGET ---
+class CategorySelector extends StatelessWidget {
+  final bool isTheya;
+  final Function(bool) onChanged;
+
+  const CategorySelector({
+    super.key,
+    required this.isTheya,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Container(
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          children: [
+            _buildTab(context, "INSIDE", !isTheya, theme.colorScheme.primary),
+            const SizedBox(width: 6),
+            _buildTab(context, "THEYA", isTheya, Colors.amber.shade700),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTab(
+    BuildContext context,
+    String label,
+    bool active,
+    Color color,
+  ) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => onChanged(label == "THEYA"),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: active ? color : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+              color: active ? Colors.white : color.withOpacity(0.6),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// --- MAIN VIEW ---
 class BusinessDashboardView extends ConsumerStatefulWidget {
   final BusinessModel business;
   const BusinessDashboardView({super.key, required this.business});
@@ -24,74 +90,88 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView> {
   void initState() {
     super.initState();
     Future.microtask(() {
-      ref
-          .read(productProvider.notifier)
-          .loadProducts(widget.business.id, isTheya);
+      ref.read(productProvider.notifier).loadProducts(widget.business.id);
       ref.read(saleProvider.notifier).loadSales(widget.business.id);
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final sales = ref.watch(saleProvider);
+    final saleState = ref.watch(saleProvider);
+    final productState = ref.watch(productProvider);
     final theme = Theme.of(context);
 
-    // Calculate Daily Stats
-    final totalSales = sales.fold(0.0, (sum, item) => sum + item.soldAtPrice);
-    final totalProfit = sales.fold(0.0, (sum, item) => sum + item.profit);
+    // Initial Loading State
+    if (saleState.isLoading || productState.isLoading) {
+      return Scaffold(
+        backgroundColor: theme.colorScheme.surface,
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
-      body: CustomScrollView(
-        slivers: [
-          // 1. Premium Animated AppBar
-          _buildSliverAppBar(theme),
+      body: saleState.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (err, stack) => Center(child: Text("Error: $err")),
+        data: (allSales) {
+          final products = productState.value ?? [];
 
-          // 2. Main Financial Summary
-          SliverToBoxAdapter(
-            child: _buildFinancialSummary(theme, totalSales, totalProfit),
-          ),
+          // Deriving UI filter from product metadata
+          final filteredSales = allSales.where((s) {
+            final product = products.cast<ProductModel?>().firstWhere(
+              (p) => p?.id == s.productId,
+              orElse: () => null,
+            );
+            return (product?.isTheya ?? false) == isTheya;
+          }).toList();
 
-          // 4. Sales History Header
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 32, 24, 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    "RECENT ACTIVITY",
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                      color: Colors.grey,
-                      letterSpacing: 1.2,
-                    ),
-                  ),
-                  Text(
-                    "${sales.length} Sales",
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                ],
+          final totalSales = allSales.fold(
+            0.0,
+            (sum, item) => sum + item.soldAtPrice,
+          );
+          final totalProfit = allSales.fold(
+            0.0,
+            (sum, item) => sum + item.profit,
+          );
+
+          return CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              _buildSliverAppBar(theme),
+              SliverToBoxAdapter(
+                child: _buildFinancialSummary(theme, totalSales, totalProfit),
               ),
-            ),
-          ),
-
-          // 5. Sales List
-          sales.isEmpty
-              ? SliverFillRemaining(child: _buildEmptySales())
-              : SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) => _SaleHistoryCard(sale: sales[index]),
-                      childCount: sales.length,
-                    ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 24),
+                  child: CategorySelector(
+                    isTheya: isTheya,
+                    onChanged: (val) => setState(() => isTheya = val),
                   ),
                 ),
-
-          const SliverToBoxAdapter(child: SizedBox(height: 100)),
-        ],
+              ),
+              SliverToBoxAdapter(
+                child: _buildSectionHeader(filteredSales.length),
+              ),
+              filteredSales.isEmpty
+                  ? SliverFillRemaining(child: _buildEmptySales())
+                  : SliverPadding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) => _SaleHistoryCard(
+                            sale: filteredSales[index],
+                            businessId: widget.business.id,
+                          ),
+                          childCount: filteredSales.length,
+                        ),
+                      ),
+                    ),
+              const SliverToBoxAdapter(child: SizedBox(height: 100)),
+            ],
+          );
+        },
       ),
       floatingActionButton: _buildFab(theme),
     );
@@ -99,40 +179,26 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView> {
 
   Widget _buildSliverAppBar(ThemeData theme) {
     return SliverAppBar(
-      expandedHeight: 120,
-      floating: false,
+      expandedHeight: 100,
       pinned: true,
       elevation: 0,
       backgroundColor: theme.colorScheme.surface,
-      flexibleSpace: FlexibleSpaceBar(
-        centerTitle: false,
-        titlePadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-        title: Text(
-          widget.business.name,
-          style: TextStyle(
-            color: theme.colorScheme.onSurface,
-            fontWeight: FontWeight.w900,
-            fontSize: 18,
-          ),
+      title: Text(
+        widget.business.name.toUpperCase(),
+        style: const TextStyle(
+          fontWeight: FontWeight.w900,
+          fontSize: 16,
+          letterSpacing: 1,
         ),
       ),
       actions: [
         IconButton(
           onPressed: () => _handleDeleteBusiness(context, ref),
-          icon: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.error.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.delete_outline_rounded,
-              color: theme.colorScheme.error,
-              size: 20,
-            ),
+          icon: Icon(
+            Icons.delete_outline_rounded,
+            color: theme.colorScheme.error,
           ),
         ),
-
         IconButton(
           onPressed: () => Navigator.push(
             context,
@@ -140,17 +206,9 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView> {
               builder: (_) => ManageProductsView(business: widget.business),
             ),
           ),
-          icon: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.inventory_2_outlined,
-              color: theme.colorScheme.primary,
-              size: 20,
-            ),
+          icon: Icon(
+            Icons.inventory_2_outlined,
+            color: theme.colorScheme.primary,
           ),
         ),
         const SizedBox(width: 16),
@@ -163,22 +221,8 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView> {
       margin: const EdgeInsets.symmetric(horizontal: 24),
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            theme.colorScheme.primary,
-            theme.colorScheme.primary.withBlue(200),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: theme.colorScheme.primary,
         borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: theme.colorScheme.primary.withOpacity(0.3),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -187,30 +231,25 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView> {
             "NET PROFIT TODAY",
             style: TextStyle(
               color: Colors.white70,
-              fontSize: 12,
+              fontSize: 10,
               fontWeight: FontWeight.bold,
               letterSpacing: 1,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           Text(
             "Rs. ${profit.toStringAsFixed(0)}",
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 36,
+              fontSize: 32,
               fontWeight: FontWeight.w900,
             ),
           ),
           const SizedBox(height: 20),
-          Container(height: 1, color: Colors.white10),
-          const SizedBox(height: 20),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildMiniStat(
-                "TOTAL REVENUE",
-                "Rs. ${sales.toStringAsFixed(0)}",
-              ),
+              _buildMiniStat("REVENUE", "Rs. ${sales.toStringAsFixed(0)}"),
               _buildMiniStat(
                 "MARGIN",
                 "${sales > 0 ? ((profit / sales) * 100).toStringAsFixed(1) : 0}%",
@@ -230,65 +269,77 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView> {
           label,
           style: const TextStyle(
             color: Colors.white54,
-            fontSize: 10,
+            fontSize: 9,
             fontWeight: FontWeight.bold,
           ),
         ),
-        const SizedBox(height: 4),
         Text(
           value,
           style: const TextStyle(
             color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
+            fontSize: 15,
+            fontWeight: FontWeight.w900,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildEmptySales() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+  Widget _buildSectionHeader(int count) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 32, 24, 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Icon(
-            Icons.receipt_long_outlined,
-            size: 48,
-            color: Colors.grey.withOpacity(0.3),
-          ),
-          const SizedBox(height: 16),
           const Text(
-            "No transactions yet today",
-            style: TextStyle(color: Colors.grey),
+            "RECENT ACTIVITY",
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+              color: Colors.grey,
+              letterSpacing: 1.5,
+            ),
+          ),
+          Text(
+            "$count Sales",
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildFab(ThemeData theme) {
-    return FloatingActionButton.extended(
-      onPressed: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) =>
-              AddSaleView(businessId: widget.business.id, isTheya: isTheya),
-        ),
+  Widget _buildEmptySales() => const Center(
+    child: Padding(
+      padding: EdgeInsets.only(top: 40),
+      child: Text(
+        "No transactions recorded yet.",
+        style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w600),
       ),
-      backgroundColor: theme.colorScheme.primary,
-      foregroundColor: Colors.white,
-      icon: const Icon(Icons.add_shopping_cart_rounded),
-      label: const Text(
-        "RECORD SALE",
-        style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1),
+    ),
+  );
+
+  Widget _buildFab(ThemeData theme) => FloatingActionButton.extended(
+    onPressed: () => Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddUpdateSaleView(businessId: widget.business.id),
       ),
-    );
-  }
+    ),
+    backgroundColor: theme.colorScheme.primary,
+    icon: const Icon(Icons.add_shopping_cart_rounded, color: Colors.white),
+    label: const Text(
+      "RECORD SALE",
+      style: TextStyle(fontWeight: FontWeight.w900, color: Colors.white),
+    ),
+  );
 
   void _handleDeleteBusiness(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -298,46 +349,32 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView> {
           style: TextStyle(fontWeight: FontWeight.w900),
         ),
         content: Text(
-          "This will remove '${widget.business.name}' and all associated data. This action is permanent once synced.",
-          style: const TextStyle(fontSize: 14),
+          "This will remove '${widget.business.name}' and all associated products and sales. This action is permanent.",
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text(
-              "CANCEL",
-              style: TextStyle(
-                color: theme.colorScheme.onSurface.withOpacity(0.5),
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            child: const Text("CANCEL"),
           ),
           ElevatedButton(
             onPressed: () async {
-              // 1. Trigger soft delete in the notifier
               await ref
                   .read(businessProvider.notifier)
                   .deleteBusiness(widget.business.id);
-
-              // 2. Close Dialog
-              if (context.mounted) Navigator.pop(context);
-
-              // 3. Navigate back to HomeView
               if (context.mounted) {
-                Navigator.of(context).pop();
+                Navigator.pop(context); // Close dialog
+                Navigator.pop(context); // Exit Dashboard
               }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: theme.colorScheme.error,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
             ),
             child: const Text(
               "DELETE",
-              style: TextStyle(fontWeight: FontWeight.bold),
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ],
@@ -346,145 +383,96 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView> {
   }
 }
 
-class _SaleHistoryCard extends StatelessWidget {
+class _SaleHistoryCard extends ConsumerWidget {
   final SaleModel sale;
-  const _SaleHistoryCard({required this.sale});
+  final String businessId;
+  const _SaleHistoryCard({required this.sale, required this.businessId});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final bool isProfitable = sale.profit > 0;
-    final Color statusColor = isProfitable
+    final statusColor = sale.profit > 0
         ? Colors.green.shade600
         : Colors.red.shade600;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
-        // Subtle depth shadow
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.1)),
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          // Soft status accent border on the left
-          decoration: BoxDecoration(
-            border: Border(left: BorderSide(color: statusColor, width: 6)),
+      child: InkWell(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                AddUpdateSaleView(businessId: businessId, sale: sale),
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                // Icon Section with dynamic background
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(
-                    isProfitable
-                        ? Icons.trending_up_rounded
-                        : Icons.trending_down_rounded,
-                    color: statusColor,
-                    size: 22,
-                  ),
+        ),
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                const SizedBox(width: 16),
-
-                // Content Section
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        sale.productTitle.toUpperCase(),
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.5,
-                          color: theme.colorScheme.onSurface,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          _buildMiniBadge(
-                            theme,
-                            "QTY: ${sale.quantity.toStringAsFixed(0)}",
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            "Rs. ${sale.soldAtPrice.toStringAsFixed(0)}",
-                            style: TextStyle(
-                              color: theme.colorScheme.onSurface.withOpacity(
-                                0.5,
-                              ),
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                child: Icon(
+                  sale.profit > 0 ? Icons.trending_up : Icons.trending_down,
+                  color: statusColor,
+                  size: 20,
                 ),
-
-                // Financial Summary Section
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      "${isProfitable ? '+' : ''}Rs. ${sale.profit.toStringAsFixed(0)}",
-                      style: TextStyle(
-                        color: statusColor,
+                      sale.productTitle.toUpperCase(),
+                      style: const TextStyle(
+                        fontSize: 13,
                         fontWeight: FontWeight.w900,
-                        fontSize: 16,
                       ),
                     ),
-                    const SizedBox(height: 2),
                     Text(
-                      "PROFIT",
+                      "Qty: ${sale.quantity.toStringAsFixed(1)} • Rs. ${sale.soldAtPrice.toStringAsFixed(0)}",
                       style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 1,
-                        color: theme.colorScheme.onSurface.withOpacity(0.3),
+                        color: Colors.grey.shade600,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
                 ),
-              ],
-            ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    "Rs. ${sale.profit.toStringAsFixed(0)}",
+                    style: TextStyle(
+                      color: statusColor,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 15,
+                    ),
+                  ),
+                  const Text(
+                    "PROFIT",
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.grey,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMiniBadge(ThemeData theme, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceVariant.withOpacity(0.5),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w900,
-          color: theme.colorScheme.primary,
         ),
       ),
     );

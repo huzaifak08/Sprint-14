@@ -36,6 +36,16 @@ class ProductTable {
     await batch.commit(noResult: true);
   }
 
+  static Future<List<ProductModel>> getAllProducts(String businessId) async {
+    final db = await LocalCacheManager.getDatabase();
+    final maps = await db.query(
+      tableName,
+      where: 'businessId = ? AND isDeleted = ?',
+      whereArgs: [businessId],
+    );
+    return maps.map(ProductModel.fromJsonDb).toList();
+  }
+
   static Future<List<ProductModel>> getProductsByBusiness(
     String businessId,
     bool isTheya,
@@ -71,5 +81,10 @@ class ProductTable {
       product.toJsonDb(),
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+  }
+
+  static Future<void> deleteAllProducts() async {
+    final db = await LocalCacheManager.getDatabase();
+    await db.delete(tableName);
   }
 }

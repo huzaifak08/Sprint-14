@@ -51,7 +51,7 @@ class UserTable {
   }
 
   /// Clear entire table
-  static Future<void> clearAllUsers() async {
+  static Future<void> deleteAllUsers() async {
     final db = await LocalCacheManager.getDatabase();
     await db.delete(tableName);
   }

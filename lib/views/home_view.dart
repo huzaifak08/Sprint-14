@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:sprint_14/clients/notifications/notification_service.dart';
-import 'package:sprint_14/home_screen.dart';
 import 'package:sprint_14/providers/biometric_provider/biometric_provider.dart';
 import 'package:sprint_14/providers/ledger_provider/ledger_provider.dart';
 import 'package:sprint_14/services/biometric_service.dart';
@@ -212,9 +211,9 @@ class _HomeViewState extends ConsumerState<HomeView>
       body: PageView(
         controller: _pageController,
         onPageChanged: (index) => setState(() => selectedView = index),
-        children: const [HomeScreen(), LedgerView(), BusinessView()],
+        children: const [LedgerView(), BusinessView()],
       ),
-      floatingActionButton: selectedView == 1
+      floatingActionButton: selectedView == 0
           ? FloatingActionButton(
               backgroundColor: appTheme.colorScheme.primary,
               child: Icon(Icons.add, color: appTheme.colorScheme.onPrimary),
@@ -238,16 +237,11 @@ class _HomeViewState extends ConsumerState<HomeView>
           segments: const [
             ButtonSegment(
               value: 0,
-              label: Text("Apps"),
-              icon: Icon(Icons.developer_mode_rounded),
-            ),
-            ButtonSegment(
-              value: 1,
               label: Text("Ledger"),
               icon: Icon(Icons.account_balance_wallet_rounded),
             ),
             ButtonSegment(
-              value: 2,
+              value: 1,
               label: Text("Business"),
               icon: Icon(Icons.business),
             ),

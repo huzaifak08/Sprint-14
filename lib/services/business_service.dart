@@ -41,6 +41,7 @@ class BusinessService {
       dev.log("Fetching business profiles for user: $uid");
 
       final snapshot = await _businessRef
+          .where('ownerId', isEqualTo: uid)
           .orderBy('createdAt', descending: true)
           .get();
 

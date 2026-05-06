@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sprint_14/cache/tables/business_table.dart';
 import 'package:sprint_14/cache/tables/ledger_table.dart';
+import 'package:sprint_14/cache/tables/product_table.dart';
+import 'package:sprint_14/cache/tables/project_table.dart';
+import 'package:sprint_14/cache/tables/sale_table.dart';
 import 'package:sprint_14/cache/tables/user_table.dart';
 import 'package:sprint_14/models/user_model.dart';
 import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
 import 'package:sprint_14/providers/biometric_provider/biometric_provider.dart';
 import 'package:sprint_14/providers/ledger_provider/ledger_provider.dart';
 import 'package:sprint_14/providers/business_provider/business_provider.dart';
+import 'package:sprint_14/providers/product_provider/product_provider.dart';
+import 'package:sprint_14/providers/sale_provider/sale_provider.dart';
 import 'package:sprint_14/providers/settings_provider/settings_provider.dart';
 import 'package:sprint_14/providers/user_provider/user_provider.dart';
 import 'package:sprint_14/views/auth/sign_in_view.dart';
@@ -309,10 +315,19 @@ class SettingsView extends ConsumerWidget {
           ),
           ElevatedButton(
             onPressed: () async {
-              await UserTable.clearAllUsers();
+              await SaleTable.clearAllSales();
+              await ProjectTable.deleteAllProjects();
+              await ProductTable.deleteAllProducts();
+              await BusinessTable.deleteAllBusinesses();
               await LedgerTable.deleteAllLedgers();
+              await UserTable.deleteAllUsers();
+
               ref.invalidate(userProvider);
               ref.invalidate(ledgerProvider);
+              ref.invalidate(businessProvider);
+              ref.invalidate(saleProvider);
+              ref.invalidate(productProvider);
+
               await ref.read(authControllerProvider.notifier).logout();
               if (context.mounted) {
                 Navigator.pushAndRemoveUntil(
@@ -320,6 +335,7 @@ class SettingsView extends ConsumerWidget {
                   MaterialPageRoute(builder: (context) => const SignInView()),
                   (route) => false,
                 );
+                ref.invalidate(authControllerProvider);
               }
             },
             style: ElevatedButton.styleFrom(

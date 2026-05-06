@@ -9,29 +9,41 @@ class SaleService {
 
   SaleService({required this.uid});
 
-  /// Helper to get the sub-collection reference for sales
-  /// Path: users/{uid}/businesses/{businessId}/sales
   CollectionReference<Map<String, dynamic>> _saleRef(String businessId) =>
       _firestore
           .collection(businessesCollection)
           .doc(businessId)
           .collection(salesCollection);
 
-  /// Record a new sale
+  /// Record or Update a sale (Set with merge covers both)
   Future<bool> recordSale({required SaleModel sale}) async {
     try {
-      dev.log("Recording Sale for Product: ${sale.productTitle}");
+      dev.log("Syncing Sale: ${sale.productTitle}", name: "SaleService");
       await _saleRef(
         sale.businessId,
       ).doc(sale.id).set(sale.toMap(), SetOptions(merge: true));
       return true;
     } catch (err) {
-      dev.log("Cloud Sale Sync Error: $err");
+      dev.log("Cloud Sale Sync Error: $err", name: "SaleService");
       return false;
     }
   }
 
-  /// Fetch sales for a specific business (paginated or filtered by date)
+  /// NEW: Delete sale data from cloud
+  Future<bool> deleteSaleData({
+    required String businessId,
+    required String saleId,
+  }) async {
+    try {
+      dev.log("Deleting Sale ID: $saleId from cloud", name: "SaleService");
+      await _saleRef(businessId).doc(saleId).delete();
+      return true;
+    } catch (err) {
+      dev.log("Cloud Sale Delete Error: $err", name: "SaleService");
+      return false;
+    }
+  }
+
   Future<List<SaleModel>> getBusinessSales(String businessId) async {
     try {
       final snapshot = await _saleRef(
@@ -41,7 +53,7 @@ class SaleService {
         return SaleModel.fromMap({...doc.data(), 'id': doc.id});
       }).toList();
     } catch (err) {
-      dev.log("Error fetching sales: $err");
+      dev.log("Error fetching sales: $err", name: "SaleService");
       throw Exception(err.toString());
     }
   }
