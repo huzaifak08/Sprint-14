@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sprint_14/models/business_model.dart';
+import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
 import 'package:sprint_14/providers/business_provider/business_provider.dart';
 import 'package:sprint_14/views/business_views/business_dashboard_view.dart';
 import 'package:uuid/uuid.dart';
@@ -61,6 +62,8 @@ class BusinessView extends ConsumerWidget {
 
   void _showAddBusinessSheet(BuildContext context, WidgetRef ref) {
     final nameController = TextEditingController();
+    String? _currentUid = ref.read(authControllerProvider).value?.uid;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -90,6 +93,8 @@ class BusinessView extends ConsumerWidget {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () {
+                  if (_currentUid == null) return;
+
                   if (nameController.text.isNotEmpty) {
                     final newBusiness = BusinessModel(
                       id: const Uuid().v4(),
@@ -97,7 +102,7 @@ class BusinessView extends ConsumerWidget {
                       type: 'Clothing',
                       currency: 'PKR',
                       createdAt: DateTime.now(),
-                      ownerId: 'current-user-uid', // Replace with real UID
+                      ownerId: _currentUid,
                       isSynced: false,
                       isDeleted: false,
                     );

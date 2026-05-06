@@ -13,8 +13,6 @@ class ProductService {
   /// Path: users/{uid}/businesses/{businessId}/products
   CollectionReference<Map<String, dynamic>> _productRef(String businessId) =>
       _firestore
-          .collection(usersCollection)
-          .doc(uid)
           .collection(businessesCollection)
           .doc(businessId)
           .collection(productsCollection);

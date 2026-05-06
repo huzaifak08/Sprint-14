@@ -74,4 +74,3 @@ jobs:
           track: production
           status: completed
           whatsNewDirectory: distribution/whatsnew
-          metadataDirectory: android/fastlane/metadata/android

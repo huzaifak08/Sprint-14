@@ -13,8 +13,6 @@ class SaleService {
   /// Path: users/{uid}/businesses/{businessId}/sales
   CollectionReference<Map<String, dynamic>> _saleRef(String businessId) =>
       _firestore
-          .collection(usersCollection)
-          .doc(uid)
           .collection(businessesCollection)
           .doc(businessId)
           .collection(salesCollection);

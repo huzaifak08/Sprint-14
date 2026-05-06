@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sprint_14/models/business_model.dart';
 import 'package:sprint_14/models/sale_model.dart';
+import 'package:sprint_14/providers/business_provider/business_provider.dart';
 import 'package:sprint_14/providers/product_provider/product_provider.dart';
 import 'package:sprint_14/providers/sale_provider/sale_provider.dart';
 import 'package:sprint_14/views/business_views/add_sale_view.dart';
@@ -116,6 +117,22 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView> {
         ),
       ),
       actions: [
+        IconButton(
+          onPressed: () => _handleDeleteBusiness(context, ref),
+          icon: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.error.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.delete_outline_rounded,
+              color: theme.colorScheme.error,
+              size: 20,
+            ),
+          ),
+        ),
+
         IconButton(
           onPressed: () => Navigator.push(
             context,
@@ -265,6 +282,65 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView> {
       label: const Text(
         "RECORD SALE",
         style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1),
+      ),
+    );
+  }
+
+  void _handleDeleteBusiness(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text(
+          "Delete Business?",
+          style: TextStyle(fontWeight: FontWeight.w900),
+        ),
+        content: Text(
+          "This will remove '${widget.business.name}' and all associated data. This action is permanent once synced.",
+          style: const TextStyle(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              "CANCEL",
+              style: TextStyle(
+                color: theme.colorScheme.onSurface.withOpacity(0.5),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              // 1. Trigger soft delete in the notifier
+              await ref
+                  .read(businessProvider.notifier)
+                  .deleteBusiness(widget.business.id);
+
+              // 2. Close Dialog
+              if (context.mounted) Navigator.pop(context);
+
+              // 3. Navigate back to HomeView
+              if (context.mounted) {
+                Navigator.of(context).pop();
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: theme.colorScheme.error,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text(
+              "DELETE",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
       ),
     );
   }

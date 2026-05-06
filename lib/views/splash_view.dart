@@ -112,8 +112,7 @@ class _SplashViewState extends ConsumerState<SplashView>
 
       authState.when(
         data: (user) {
-          // TODO: FIX THESE !!!
-          if (!user!.emailVerified) {
+          if (user?.emailVerified == false) {
             _navigate(const VerifyEmailView());
           } else {
             final settings = settingsAsync.value;

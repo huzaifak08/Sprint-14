@@ -214,16 +214,18 @@ class _HomeViewState extends ConsumerState<HomeView>
         onPageChanged: (index) => setState(() => selectedView = index),
         children: const [HomeScreen(), LedgerView(), BusinessView()],
       ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: appTheme.colorScheme.primary,
-        child: Icon(Icons.add, color: appTheme.colorScheme.onPrimary),
-        onPressed: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const AddOrUpdateLedgerView(),
-          ),
-        ),
-      ),
+      floatingActionButton: selectedView == 1
+          ? FloatingActionButton(
+              backgroundColor: appTheme.colorScheme.primary,
+              child: Icon(Icons.add, color: appTheme.colorScheme.onPrimary),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const AddOrUpdateLedgerView(),
+                ),
+              ),
+            )
+          : SizedBox.shrink(),
     );
   }
 

@@ -13,10 +13,8 @@ class BusinessService {
 
   /// Helper getter to point to the user's private business subcollection
   /// Path: users/{uid}/businesses
-  CollectionReference<Map<String, dynamic>> get _businessRef => _firestore
-      .collection(usersCollection)
-      .doc(uid)
-      .collection(
+  CollectionReference<Map<String, dynamic>> get _businessRef =>
+      _firestore.collection(
         businessesCollection,
       ); // You can add 'businessesCollection' to your constants.dart
 
