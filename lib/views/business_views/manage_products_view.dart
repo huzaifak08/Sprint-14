@@ -5,14 +5,38 @@ import 'package:sprint_14/models/product_model.dart';
 import 'package:sprint_14/providers/product_provider/product_provider.dart';
 import 'package:sprint_14/views/business_views/add_update_product_view.dart';
 
-class ManageProductsView extends ConsumerWidget {
+class ManageProductsView extends ConsumerStatefulWidget {
   final BusinessModel business;
   const ManageProductsView({super.key, required this.business});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ManageProductsView> createState() => _ManageProductsViewState();
+}
+
+class _ManageProductsViewState extends ConsumerState<ManageProductsView> {
+  // We keep track of the current view filter (Theya vs Inside)
+  bool isTheyaView = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // 🔥 Trigger the contextual load immediately on entry
+    Future.microtask(() {
+      _fetchProducts();
+    });
+  }
+
+  void _fetchProducts() {
+    ref
+        .read(productProvider.notifier)
+        .loadProducts(widget.business.id, isTheyaView);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final products = ref.watch(productProvider);
+    // Watch the AsyncValue from the new ProductNotifier
+    final productState = ref.watch(productProvider);
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
@@ -22,24 +46,45 @@ class ManageProductsView extends ConsumerWidget {
           // 1. Premium Header
           _buildSliverHeader(context, theme),
 
-          // 2. Catalog Stats Summary
-          SliverToBoxAdapter(child: _buildCatalogStats(theme, products)),
+          // 2. Catalog Stats Summary & Tab Toggle
+          productState.when(
+            data: (products) => SliverToBoxAdapter(
+              child: Column(
+                children: [
+                  _buildCatalogStats(theme, products),
+                  const SizedBox(height: 12),
+                  _buildToggleFilter(theme),
+                  const SizedBox(height: 12),
+                ],
+              ),
+            ),
+            loading: () => const SliverToBoxAdapter(child: SizedBox.shrink()),
+            error: (_, __) =>
+                const SliverToBoxAdapter(child: SizedBox.shrink()),
+          ),
 
-          // 3. Product List
-          products.isEmpty
-              ? SliverFillRemaining(child: _buildEmptyCatalog(theme))
-              : SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) => _ProductCatalogCard(
-                        product: products[index],
-                        businessId: business.id,
+          // 3. Product List Handling
+          productState.when(
+            loading: () => const SliverFillRemaining(
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (err, _) =>
+                SliverFillRemaining(child: Center(child: Text("Error: $err"))),
+            data: (products) => products.isEmpty
+                ? SliverFillRemaining(child: _buildEmptyCatalog(theme))
+                : SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) => _ProductCatalogCard(
+                          product: products[index],
+                          businessId: widget.business.id,
+                        ),
+                        childCount: products.length,
                       ),
-                      childCount: products.length,
                     ),
                   ),
-                ),
+          ),
         ],
       ),
       floatingActionButton: _buildFab(context, theme),
@@ -68,25 +113,58 @@ class ManageProductsView extends ConsumerWidget {
     );
   }
 
-  Widget _buildCatalogStats(ThemeData theme, List<ProductModel> products) {
-    final theyaCount = products.where((p) => p.isTheya).length;
-    final insideCount = products.length - theyaCount;
+  Widget _buildToggleFilter(ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
+        children: [
+          _filterButton("INSIDE", !isTheyaView, theme.colorScheme.primary),
+          const SizedBox(width: 10),
+          _filterButton("THEYA", isTheyaView, Colors.amber.shade700),
+        ],
+      ),
+    );
+  }
 
+  Widget _filterButton(String label, bool active, Color color) {
+    return Expanded(
+      child: InkWell(
+        onTap: () {
+          setState(() => isTheyaView = (label == "THEYA"));
+          _fetchProducts();
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: active ? color : color.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+              color: active ? Colors.white : color,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCatalogStats(ThemeData theme, List<ProductModel> products) {
+    // In a real scenario, you'd likely fetch total counts from a separate provider
+    // or local DB, but for the current view:
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Row(
         children: [
           _buildStatChip(
             theme,
-            "THEYA",
-            theyaCount.toString(),
-            Colors.amber.shade700,
-          ),
-          const SizedBox(width: 12),
-          _buildStatChip(
-            theme,
-            "INSIDE",
-            insideCount.toString(),
+            "Total Products",
+            products.length.toString(),
             theme.colorScheme.primary,
           ),
         ],
@@ -159,7 +237,7 @@ class ManageProductsView extends ConsumerWidget {
       onPressed: () => Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => AddUpdateProductView(businessId: business.id),
+          builder: (_) => AddUpdateProductView(businessId: widget.business.id),
         ),
       ),
       backgroundColor: theme.colorScheme.primary,
@@ -215,7 +293,6 @@ class _ProductCatalogCard extends ConsumerWidget {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                // Visual Indicator for Classification
                 Container(
                   width: 50,
                   height: 50,
@@ -235,8 +312,6 @@ class _ProductCatalogCard extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(width: 16),
-
-                // Info Section
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -263,8 +338,6 @@ class _ProductCatalogCard extends ConsumerWidget {
                     ],
                   ),
                 ),
-
-                // Pricing Section
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [

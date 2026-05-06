@@ -45,42 +45,51 @@ class _AddSaleViewState extends ConsumerState<AddSaleView> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final products = ref.watch(productProvider);
+    final productPro = ref.watch(productProvider);
 
-    return Scaffold(
-      backgroundColor: theme.colorScheme.surface,
-      // Using a CustomScrollView to ensure no overflow when keyboard appears
-      body: Column(
-        children: [
-          Expanded(
-            child: CustomScrollView(
-              physics: const BouncingScrollPhysics(),
-              slivers: [
-                _buildModernHeader(theme),
-                SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  sliver: SliverList(
-                    delegate: SliverChildListDelegate([
-                      const SizedBox(height: 24),
-                      _buildSectionLabel("INVENTORY SELECTION"),
-                      const SizedBox(height: 12),
-                      _buildProductSelector(theme, products),
-                      const SizedBox(height: 24),
-                      _buildSectionLabel("TRANSACTION DETAILS"),
-                      const SizedBox(height: 12),
-                      _buildInputGrid(theme),
-                      const SizedBox(height: 32),
-                      if (_selectedProduct != null) _buildProfitInsight(theme),
-                      const SizedBox(height: 40), // Bottom padding for scroll
-                    ]),
-                  ),
+    return productPro.when(
+      data: (products) {
+        return Scaffold(
+          backgroundColor: theme.colorScheme.surface,
+          // Using a CustomScrollView to ensure no overflow when keyboard appears
+          body: Column(
+            children: [
+              Expanded(
+                child: CustomScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  slivers: [
+                    _buildModernHeader(theme),
+                    SliverPadding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      sliver: SliverList(
+                        delegate: SliverChildListDelegate([
+                          const SizedBox(height: 24),
+                          _buildSectionLabel("INVENTORY SELECTION"),
+                          const SizedBox(height: 12),
+                          _buildProductSelector(theme, products),
+                          const SizedBox(height: 24),
+                          _buildSectionLabel("TRANSACTION DETAILS"),
+                          const SizedBox(height: 12),
+                          _buildInputGrid(theme),
+                          const SizedBox(height: 32),
+                          if (_selectedProduct != null)
+                            _buildProfitInsight(theme),
+                          const SizedBox(
+                            height: 40,
+                          ), // Bottom padding for scroll
+                        ]),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+              _buildConfirmButton(theme),
+            ],
           ),
-          _buildConfirmButton(theme),
-        ],
-      ),
+        );
+      },
+      error: (error, stackTrace) => Text("Error"),
+      loading: () => Center(child: CircularProgressIndicator()),
     );
   }
 

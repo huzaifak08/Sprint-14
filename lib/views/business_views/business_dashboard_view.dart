@@ -51,9 +51,6 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView> {
             child: _buildFinancialSummary(theme, totalSales, totalProfit),
           ),
 
-          // 3. High-Velocity Location Toggle
-          SliverToBoxAdapter(child: _buildTheyaSelector(theme)),
-
           // 4. Sales History Header
           SliverToBoxAdapter(
             child: Padding(
@@ -230,45 +227,6 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildTheyaSelector(ThemeData theme) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 32, 24, 0),
-      child: Container(
-        padding: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceVariant.withOpacity(0.4),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Row(
-          children: [
-            _ToggleBtn(
-              label: "THEYA",
-              isActive: isTheya,
-              color: Colors.amber.shade700,
-              onTap: () {
-                setState(() => isTheya = true);
-                ref
-                    .read(productProvider.notifier)
-                    .loadProducts(widget.business.id, true);
-              },
-            ),
-            _ToggleBtn(
-              label: "INSIDE",
-              isActive: !isTheya,
-              color: theme.colorScheme.primary,
-              onTap: () {
-                setState(() => isTheya = false);
-                ref
-                    .read(productProvider.notifier)
-                    .loadProducts(widget.business.id, false);
-              },
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -451,47 +409,6 @@ class _SaleHistoryCard extends StatelessWidget {
           fontSize: 10,
           fontWeight: FontWeight.w900,
           color: theme.colorScheme.primary,
-        ),
-      ),
-    );
-  }
-}
-
-class _ToggleBtn extends StatelessWidget {
-  final String label;
-  final bool isActive;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _ToggleBtn({
-    required this.label,
-    required this.isActive,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            color: isActive ? color : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Center(
-            child: Text(
-              label,
-              style: TextStyle(
-                color: isActive ? Colors.white : Colors.grey,
-                fontWeight: FontWeight.w900,
-                fontSize: 12,
-                letterSpacing: 1,
-              ),
-            ),
-          ),
         ),
       ),
     );

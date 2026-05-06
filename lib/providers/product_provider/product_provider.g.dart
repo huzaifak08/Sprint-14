@@ -13,7 +13,7 @@ part of 'product_provider.dart';
 final productProvider = ProductNotifierProvider._();
 
 final class ProductNotifierProvider
-    extends $NotifierProvider<ProductNotifier, List<ProductModel>> {
+    extends $AsyncNotifierProvider<ProductNotifier, List<ProductModel>> {
   ProductNotifierProvider._()
     : super(
         from: null,
@@ -31,29 +31,22 @@ final class ProductNotifierProvider
   @$internal
   @override
   ProductNotifier create() => ProductNotifier();
-
-  /// {@macro riverpod.override_with_value}
-  Override overrideWithValue(List<ProductModel> value) {
-    return $ProviderOverride(
-      origin: this,
-      providerOverride: $SyncValueProvider<List<ProductModel>>(value),
-    );
-  }
 }
 
-String _$productNotifierHash() => r'767f3b78946001a8c3d08293a22fc1d77a157731';
+String _$productNotifierHash() => r'e451f13c39e324a419dda9e8e667fcf5820017a2';
 
-abstract class _$ProductNotifier extends $Notifier<List<ProductModel>> {
-  List<ProductModel> build();
+abstract class _$ProductNotifier extends $AsyncNotifier<List<ProductModel>> {
+  FutureOr<List<ProductModel>> build();
   @$mustCallSuper
   @override
   void runBuild() {
-    final ref = this.ref as $Ref<List<ProductModel>, List<ProductModel>>;
+    final ref =
+        this.ref as $Ref<AsyncValue<List<ProductModel>>, List<ProductModel>>;
     final element =
         ref.element
             as $ClassProviderElement<
-              AnyNotifier<List<ProductModel>, List<ProductModel>>,
-              List<ProductModel>,
+              AnyNotifier<AsyncValue<List<ProductModel>>, List<ProductModel>>,
+              AsyncValue<List<ProductModel>>,
               Object?,
               Object?
             >;

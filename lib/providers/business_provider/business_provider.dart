@@ -1,7 +1,9 @@
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:sprint_14/cache/tables/business_table.dart';
 import 'package:sprint_14/models/business_model.dart';
+import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
 import 'package:sprint_14/providers/user_provider/user_provider.dart';
 import 'package:sprint_14/services/business_service.dart';
 import 'dart:developer' as dev;
@@ -10,6 +12,8 @@ part 'business_provider.g.dart';
 
 @Riverpod(keepAlive: true)
 class BusinessNotifier extends _$BusinessNotifier {
+  User? get _user => ref.read(authControllerProvider).value;
+
   @override
   Future<List<BusinessModel>> build() async {
     // 🔥 Watch the user state. If user changes, build() re-runs.
@@ -112,13 +116,12 @@ class BusinessNotifier extends _$BusinessNotifier {
 
   /// 6. Background Sync Logic
   Future<void> syncPending() async {
-    final user = ref.read(userProvider).value;
-    if (user == null) return;
+    if (_user == null) return;
 
     final connectivity = await Connectivity().checkConnectivity();
     if (connectivity.contains(ConnectivityResult.none)) return;
 
-    final service = BusinessService(uid: user.uid);
+    final service = BusinessService(uid: _user?.uid ?? "NO UID");
     final unsynced = await BusinessTable.getUnsyncedBusinesses();
 
     for (final b in unsynced) {
