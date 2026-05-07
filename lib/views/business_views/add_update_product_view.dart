@@ -67,9 +67,13 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
       );
 
       if (widget.product == null) {
-        ref.read(productProvider.notifier).addProduct(product);
+        ref
+            .read(productProvider(widget.businessId).notifier)
+            .addProduct(product);
       } else {
-        ref.read(productProvider.notifier).updateProduct(product);
+        ref
+            .read(productProvider(widget.businessId).notifier)
+            .updateProduct(product);
       }
       Navigator.pop(context);
     }
@@ -340,7 +344,7 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
           TextButton(
             onPressed: () {
               ref
-                  .read(productProvider.notifier)
+                  .read(productProvider(widget.businessId).notifier)
                   .deleteProduct(widget.product!.id, widget.businessId);
               Navigator.pop(context);
               Navigator.pop(context);

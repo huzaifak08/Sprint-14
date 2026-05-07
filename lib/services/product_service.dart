@@ -45,4 +45,20 @@ class ProductService {
       throw Exception(err.toString());
     }
   }
+
+  /// Deletes a product document from the cloud
+  Future<bool> deleteProduct({
+    required String businessId,
+    required String productId,
+  }) async {
+    try {
+      // Assuming you are using Firestore; adapt if using a different API
+      await _productRef(businessId).doc(productId).delete();
+
+      return true;
+    } catch (e) {
+      dev.log("Cloud Delete Product Error: $e", name: "ProductService");
+      return false;
+    }
+  }
 }

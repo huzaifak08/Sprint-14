@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sprint_14/components/category_selector.dart';
-import 'package:sprint_14/models/business_model.dart';
+import 'package:sprint_14/components/sync_status_badge.dart';
 import 'package:sprint_14/models/product_model.dart';
 import 'package:sprint_14/providers/product_provider/product_provider.dart';
 import 'package:sprint_14/views/business_views/add_update_product_view.dart';
 
 class ManageProductsView extends ConsumerStatefulWidget {
-  final BusinessModel business;
-  const ManageProductsView({super.key, required this.business});
+  final String businessId;
+  const ManageProductsView({super.key, required this.businessId});
 
   @override
   ConsumerState<ManageProductsView> createState() => _ManageProductsViewState();
@@ -22,14 +22,16 @@ class _ManageProductsViewState extends ConsumerState<ManageProductsView> {
     super.initState();
     Future.microtask(() {
       // Load the FULL unfiltered inventory for this business
-      ref.read(productProvider.notifier).loadProducts(widget.business.id);
+      ref
+          .read(productProvider(widget.businessId).notifier)
+          .loadProducts(widget.businessId);
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final productState = ref.watch(productProvider);
+    final productState = ref.watch(productProvider(widget.businessId));
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
@@ -75,7 +77,7 @@ class _ManageProductsViewState extends ConsumerState<ManageProductsView> {
                   delegate: SliverChildBuilderDelegate(
                     (context, index) => _ProductCatalogCard(
                       product: filteredProducts[index],
-                      businessId: widget.business.id,
+                      businessId: widget.businessId,
                     ),
                     childCount: filteredProducts.length,
                   ),
@@ -137,7 +139,7 @@ class _ManageProductsViewState extends ConsumerState<ManageProductsView> {
       onPressed: () => Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => AddUpdateProductView(businessId: widget.business.id),
+          builder: (_) => AddUpdateProductView(businessId: widget.businessId),
         ),
       ),
       backgroundColor: theme.colorScheme.primary,
@@ -238,14 +240,7 @@ class _ProductCatalogCard extends StatelessWidget {
                       fontSize: 15,
                     ),
                   ),
-                  const Text(
-                    "MSRP",
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w900,
-                      color: Colors.grey,
-                    ),
-                  ),
+                  SyncStatusBadge(isSynced: product.isSynced),
                 ],
               ),
             ],

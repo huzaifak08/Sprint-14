@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sprint_14/components/category_selector.dart';
+import 'package:sprint_14/helpers/app_data.dart';
 import 'package:sprint_14/models/product_model.dart';
 import 'package:sprint_14/models/sale_model.dart';
 import 'package:sprint_14/providers/product_provider/product_provider.dart';
 import 'package:sprint_14/providers/sale_provider/sale_provider.dart';
-import 'package:uuid/uuid.dart';
 
 class AddUpdateSaleView extends ConsumerStatefulWidget {
   final String businessId;
@@ -28,63 +28,66 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
   double _measurementValue = 1.0;
   double _currentProfit = 0.0;
   bool _isEditMode = false;
+  bool _isInitialized = false; // Prevents re-initialization loops
 
   @override
   void initState() {
     super.initState();
     _isEditMode = widget.sale != null;
-
-    if (_isEditMode) {
-      _initializeEditData();
-    } else {
+    if (!_isEditMode) {
       _qtyController.text = "1";
     }
   }
 
-  void _initializeEditData() {
+  /// Reactive initialization: Populates fields once products are available
+  void _initializeEditData(List<ProductModel> products) {
+    if (_isInitialized || widget.sale == null) return;
+
     final sale = widget.sale!;
-    _priceController.text = sale.soldAtPrice.toString();
+    final product = products.cast<ProductModel?>().firstWhere(
+      (p) => p?.id == sale.productId,
+      orElse: () => null,
+    );
 
-    // Check if we need to split quantity into measurement and pieces
-    // Note: This logic assumes we can find the product to check its unit type
-    Future.microtask(() {
-      final products = ref.read(productProvider).value ?? [];
-      final product = products.firstWhere((p) => p.id == sale.productId);
+    if (product != null) {
+      // Use addPostFrameCallback to avoid calling setState during build
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() {
+          _selectedProduct = product;
+          _isTheyaFilter = product.isTheya;
+          _priceController.text = sale.soldAtPrice.toStringAsFixed(0);
 
-      setState(() {
-        _selectedProduct = product;
-        _isTheyaFilter = product.isTheya;
+          final isLinear =
+              product.unitType == "Meter" || product.unitType == "Gazz";
+          if (isLinear) {
+            _measurementValue = sale.quantity;
+            _qtyController.text = "1";
+          } else {
+            _qtyController.text = sale.quantity.toStringAsFixed(0);
+          }
 
-        if (product.unitType == "Meter" || product.unitType == "Gazz") {
-          // If total quantity is 7.5 and piece multiplier is 1 (default during edit)
-          // You might need a more complex way to store original pieces vs length,
-          // but here we default to the total quantity as length and 1 as piece.
-          _measurementValue = sale.quantity;
-          _qtyController.text = "1";
-        } else {
-          _qtyController.text = sale.quantity.toStringAsFixed(0);
-        }
-        _updateProfit();
+          _isInitialized = true;
+          _updateProfit();
+        });
       });
-    });
+    }
   }
 
   void _updateProfit() {
     if (_selectedProduct == null) return;
 
-    final soldPrice = double.tryParse(_priceController.text) ?? 0.0;
+    final totalBilling = double.tryParse(_priceController.text) ?? 0.0;
     final multiplier = double.tryParse(_qtyController.text) ?? 1.0;
 
     final bool isLinear =
         _selectedProduct!.unitType == "Meter" ||
         _selectedProduct!.unitType == "Gazz";
-    final totalUnitsSold = isLinear
-        ? (_measurementValue * multiplier)
-        : multiplier;
+    final totalQty = isLinear ? (_measurementValue * multiplier) : multiplier;
 
     setState(() {
-      _currentProfit =
-          (soldPrice - _selectedProduct!.retailPrice) * totalUnitsSold;
+      final totalCostOfStock = _selectedProduct!.retailPrice * totalQty;
+      _currentProfit = totalBilling - totalCostOfStock;
     });
   }
 
@@ -98,58 +101,66 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final productState = ref.watch(productProvider);
+    final productState = ref.watch(productProvider(widget.businessId));
+
+    // Reactive Listener: Auto-populates when data arrives
+    productState.whenData((products) => _initializeEditData(products));
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
-      body: Column(
-        children: [
-          Expanded(
-            child: CustomScrollView(
-              physics: const BouncingScrollPhysics(),
-              slivers: [
-                _buildHeader(theme),
-                SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  sliver: SliverList(
-                    delegate: SliverChildListDelegate([
-                      const SizedBox(height: 24),
-                      _buildSectionLabel("SELECT CATALOG CATEGORY"),
-                      const SizedBox(height: 12),
-                      CategorySelector(
-                        isTheya: _isTheyaFilter,
-                        onChanged: (val) {
-                          setState(() {
-                            _isTheyaFilter = val;
-                            _selectedProduct = null;
-                            _priceController.clear();
-                            _currentProfit = 0;
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 24),
-                      _buildSectionLabel("AVAILABLE INVENTORY"),
-                      const SizedBox(height: 12),
-                      _buildProductSelector(theme, productState),
-                      const SizedBox(height: 24),
-                      if (_selectedProduct != null) ...[
-                        _buildMeasurementSection(theme),
+      body: productState.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text("Error: $e")),
+        data: (products) => Column(
+          children: [
+            Expanded(
+              child: CustomScrollView(
+                physics: const BouncingScrollPhysics(),
+                slivers: [
+                  _buildHeader(theme),
+                  SliverPadding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    sliver: SliverList(
+                      delegate: SliverChildListDelegate([
                         const SizedBox(height: 24),
-                      ],
-                      _buildSectionLabel("TRANSACTION DETAILS"),
-                      const SizedBox(height: 12),
-                      _buildInputGrid(theme),
-                      const SizedBox(height: 32),
-                      if (_selectedProduct != null) _buildProfitInsight(theme),
-                      const SizedBox(height: 40),
-                    ]),
+                        _buildSectionLabel("SELECT CATALOG CATEGORY"),
+                        const SizedBox(height: 12),
+                        CategorySelector(
+                          isTheya: _isTheyaFilter,
+                          onChanged: (val) {
+                            setState(() {
+                              _isTheyaFilter = val;
+                              _selectedProduct = null;
+                              _priceController.clear();
+                              _currentProfit = 0;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 24),
+                        _buildSectionLabel("AVAILABLE INVENTORY"),
+                        const SizedBox(height: 12),
+                        _buildProductSelector(theme, products),
+                        const SizedBox(height: 24),
+                        if (_selectedProduct != null) ...[
+                          _buildMeasurementSection(theme),
+                          const SizedBox(height: 24),
+                        ],
+                        _buildSectionLabel("TRANSACTION DETAILS"),
+                        const SizedBox(height: 12),
+                        _buildInputGrid(theme),
+                        const SizedBox(height: 32),
+                        if (_selectedProduct != null)
+                          _buildProfitInsight(theme),
+                        const SizedBox(height: 40),
+                      ]),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          _buildConfirmButton(theme),
-        ],
+            _buildConfirmButton(theme),
+          ],
+        ),
       ),
     );
   }
@@ -188,57 +199,48 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
 
   Widget _buildProductSelector(
     ThemeData theme,
-    AsyncValue<List<ProductModel>> state,
+    List<ProductModel> allProducts,
   ) {
-    return state.when(
-      loading: () => const LinearProgressIndicator(),
-      error: (e, _) => Text("Error: $e"),
-      data: (allProducts) {
-        final filteredList = allProducts
-            .where((p) => p.isTheya == _isTheyaFilter)
-            .toList();
+    final filteredList = allProducts
+        .where((p) => p.isTheya == _isTheyaFilter)
+        .toList();
 
-        return Container(
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: DropdownButtonFormField<ProductModel>(
-            value: _selectedProduct,
-            hint: Text("Select ${_isTheyaFilter ? 'Theya' : 'Inside'} Item..."),
-            decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.inventory_2_outlined),
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 12,
-              ),
-            ),
-            items: filteredList
-                .map(
-                  (p) => DropdownMenuItem(
-                    value: p,
-                    child: Text(
-                      p.title.toUpperCase(),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                      ),
-                    ),
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: DropdownButtonFormField<ProductModel>(
+        value: _selectedProduct,
+        hint: Text("Select ${_isTheyaFilter ? 'Theya' : 'Inside'} Item..."),
+        decoration: const InputDecoration(
+          prefixIcon: Icon(Icons.inventory_2_outlined),
+          border: InputBorder.none,
+          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        ),
+        items: filteredList
+            .map(
+              (p) => DropdownMenuItem(
+                value: p,
+                child: Text(
+                  p.title.toUpperCase(),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
                   ),
-                )
-                .toList(),
-            onChanged: (val) {
-              setState(() {
-                _selectedProduct = val;
-                _priceController.text = val?.msrpPrice.toString() ?? "";
-                _measurementValue = 1.0;
-                _updateProfit();
-              });
-            },
-          ),
-        );
-      },
+                ),
+              ),
+            )
+            .toList(),
+        onChanged: (val) {
+          setState(() {
+            _selectedProduct = val;
+            _priceController.text = val?.msrpPrice.toStringAsFixed(0) ?? "";
+            _measurementValue = 1.0;
+            _updateProfit();
+          });
+        },
+      ),
     );
   }
 
@@ -318,10 +320,10 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
           flex: 2,
           child: _buildRefinedField(
             theme,
-            label: "UNIT PRICE",
+            label: "FINAL BILLING (PKR)",
             controller: _priceController,
             isNumber: true,
-            hint: "0.0",
+            hint: "Total Amount",
           ),
         ),
       ],
@@ -372,43 +374,97 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
   }
 
   Widget _buildProfitInsight(ThemeData theme) {
+    if (_selectedProduct == null) return const SizedBox.shrink();
+
     final isHealthy = _currentProfit >= 0;
     final accentColor = isHealthy ? Colors.green.shade600 : Colors.red.shade600;
+
+    final multiplier = double.tryParse(_qtyController.text) ?? 1.0;
+    final bool isLinear =
+        _selectedProduct!.unitType == "Meter" ||
+        _selectedProduct!.unitType == "Gazz";
+    final totalQty = isLinear ? (_measurementValue * multiplier) : multiplier;
+
+    final totalCost = _selectedProduct!.retailPrice * totalQty;
+    final suggestedMSRP = _selectedProduct!.msrpPrice * totalQty;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: accentColor.withOpacity(0.05),
+        color: theme.colorScheme.surfaceVariant.withOpacity(0.2),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: accentColor.withOpacity(0.2)),
+        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.1)),
       ),
-      child: Row(
+      child: Column(
         children: [
-          Icon(
-            isHealthy ? Icons.trending_up : Icons.trending_down,
-            color: accentColor,
-            size: 32,
-          ),
-          const SizedBox(width: 16),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                isHealthy ? "PROFIT" : "LOSS",
+              const Text(
+                "CATALOG PRICE (MSRP)",
                 style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w900,
-                  color: accentColor,
+                  color: Colors.grey,
                 ),
               ),
               Text(
-                "Rs. ${_currentProfit.toStringAsFixed(0)}",
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w900,
-                  color: accentColor,
+                "Rs. ${suggestedMSRP.toStringAsFixed(0)}",
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey,
                 ),
               ),
             ],
+          ),
+          const Divider(height: 24),
+          Row(
+            children: [
+              _statBlock(
+                "YOUR COST",
+                "Rs. ${totalCost.toStringAsFixed(0)}",
+                Colors.grey.shade700,
+              ),
+              Container(
+                height: 30,
+                width: 1,
+                color: theme.colorScheme.outline.withOpacity(0.2),
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+              ),
+              _statBlock(
+                isHealthy ? "NET PROFIT" : "NET LOSS",
+                "Rs. ${_currentProfit.toStringAsFixed(0)}",
+                accentColor,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statBlock(String label, String value, Color color) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w900,
+              color: Colors.grey,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+              color: color,
+            ),
           ),
         ],
       ),
@@ -483,10 +539,10 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
           ElevatedButton(
             onPressed: () {
               ref
-                  .read(saleProvider.notifier)
+                  .read(saleProvider(widget.businessId).notifier)
                   .deleteSale(widget.sale!.id, widget.businessId);
-              Navigator.pop(context); // Close dialog
-              Navigator.pop(context); // Close view
+              Navigator.pop(context);
+              Navigator.pop(context);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: theme.colorScheme.error,
@@ -499,6 +555,7 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
   }
 
   void _submitSale() {
+    final totalBilling = double.tryParse(_priceController.text) ?? 0.0;
     final multiplier = double.tryParse(_qtyController.text) ?? 1.0;
     final bool isLinear =
         _selectedProduct!.unitType == "Meter" ||
@@ -508,11 +565,11 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
         : multiplier;
 
     final sale = SaleModel(
-      id: _isEditMode ? widget.sale!.id : const Uuid().v4(),
+      id: _isEditMode ? widget.sale!.id : AppData.shared.uuid.v4(),
       businessId: widget.businessId,
       productId: _selectedProduct!.id,
       productTitle: _selectedProduct!.title,
-      soldAtPrice: double.parse(_priceController.text),
+      soldAtPrice: totalBilling,
       profit: _currentProfit,
       quantity: finalQuantity,
       dateTime: _isEditMode ? widget.sale!.dateTime : DateTime.now(),
@@ -521,9 +578,9 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
     );
 
     if (_isEditMode) {
-      ref.read(saleProvider.notifier).updateSale(sale);
+      ref.read(saleProvider(widget.businessId).notifier).updateSale(sale);
     } else {
-      ref.read(saleProvider.notifier).recordSale(sale);
+      ref.read(saleProvider(widget.businessId).notifier).recordSale(sale);
     }
     Navigator.pop(context);
   }

@@ -11,41 +11,70 @@ part 'sale_provider.g.dart';
 @Riverpod(keepAlive: true)
 class SaleNotifier extends _$SaleNotifier {
   @override
-  FutureOr<List<SaleModel>> build() async {
+  FutureOr<List<SaleModel>> build(String businessId) async {
     // Watches the user to reset state on logout/login
     final userState = ref.watch(userProvider);
     if (userState.value == null) return [];
-    return [];
+
+    // Phase 1: Load from cache immediately during initialization
+    final cache = await SaleTable.getBusinessSalesFromCache(businessId);
+
+    // Phase 2: Fire and forget the cloud sync so it doesn't block the UI
+    _performSilentCloudSync(businessId);
+
+    return cache;
   }
 
-  /// 1. Load Sales (Cache First, Cloud Sync Background)
+  /// 1. Primary Load Logic (Used for manual refreshes or initial trigger)
   Future<void> loadSales(String businessId) async {
-    state = const AsyncValue.loading();
+    // Phase 1: Immediate Cache Delivery
     try {
-      // Instant Cache Load
       final cache = await SaleTable.getBusinessSalesFromCache(businessId);
       state = AsyncValue.data(cache);
-
-      final user = ref.read(userProvider).value;
-      if (user == null) return;
-
-      // Background Cloud Fetch
-      final service = SaleService(uid: user.uid);
-      final cloud = await service.getBusinessSales(businessId);
-
-      // Save to cache and update state
-      // Implement saveAllFetchedSales in your SaleTable to handle bulk inserts
-      await SaleTable.saveAllSales(cloud);
-      state = AsyncValue.data(cloud);
-
-      syncPending(businessId);
+      dev.log("UI updated with local cache", name: "SaleProvider");
     } catch (e, stack) {
-      dev.log("Sale Load Error: $e", name: "SaleProvider");
+      dev.log("Cache Read Error: $e", name: "SaleProvider");
       state = AsyncValue.error(e, stack);
+      return;
+    }
+
+    // Phase 2: Silent Cloud Sync
+    _performSilentCloudSync(businessId);
+  }
+
+  /// Internal helper to sync cloud data without interrupting the user
+  Future<void> _performSilentCloudSync(String businessId) async {
+    final user = ref.read(userProvider).value;
+    if (user == null) return;
+
+    try {
+      final connectivity = await Connectivity().checkConnectivity();
+      if (connectivity.contains(ConnectivityResult.none)) {
+        dev.log("Device offline, cloud sync skipped.", name: "SaleProvider");
+        return;
+      }
+
+      final service = SaleService(uid: user.uid);
+      dev.log("Fetching fresh cloud data...", name: "SaleProvider");
+      final cloudSales = await service.getBusinessSales(businessId);
+
+      // Persist to local DB
+      await SaleTable.saveAllSales(cloudSales);
+
+      // 🔥 UPDATE UI LIVE: If there are changes, they pop up now
+      state = AsyncValue.data(cloudSales);
+      dev.log("UI updated with fresh cloud data", name: "SaleProvider");
+
+      // Push any local changes that were made while offline
+      syncPending(businessId);
+    } catch (e) {
+      dev.log("Silent Cloud Sync Failed: $e", name: "SaleProvider");
+      // We don't update 'state' with an error here because the user
+      // is already looking at perfectly fine cache data.
     }
   }
 
-  /// 2. Record Sale
+  /// 2. Record Sale (Optimistic)
   Future<void> recordSale(SaleModel sale) async {
     final local = sale.copyWith(isSynced: false, isDeleted: false);
 
@@ -54,10 +83,10 @@ class SaleNotifier extends _$SaleNotifier {
     state = AsyncData([local, ...currentSales]);
 
     await SaleTable.saveSingleSale(local);
-    syncPending(sale.businessId);
+    _performSilentCloudSync(sale.businessId);
   }
 
-  /// 3. Update Sale (New)
+  /// 3. Update Sale (Optimistic)
   Future<void> updateSale(SaleModel updatedSale) async {
     final local = updatedSale.copyWith(isSynced: false);
 
@@ -68,10 +97,10 @@ class SaleNotifier extends _$SaleNotifier {
     ]);
 
     await SaleTable.saveSingleSale(local);
-    syncPending(local.businessId);
+    _performSilentCloudSync(local.businessId);
   }
 
-  /// 4. Delete Sale (Soft Delete)
+  /// 4. Delete Sale (Optimistic Soft Delete)
   Future<void> deleteSale(String saleId, String businessId) async {
     final currentSales = state.value ?? [];
     final sale = currentSales.firstWhere((s) => s.id == saleId);
@@ -81,10 +110,10 @@ class SaleNotifier extends _$SaleNotifier {
     state = AsyncData(currentSales.where((s) => s.id != saleId).toList());
 
     await SaleTable.saveSingleSale(deletedMarker);
-    syncPending(businessId);
+    _performSilentCloudSync(businessId);
   }
 
-  /// 5. Background Sync
+  /// 5. Background Sync Engine
   Future<void> syncPending(String businessId) async {
     final user = ref.read(userProvider).value;
     final connectivity = await Connectivity().checkConnectivity();
@@ -111,7 +140,7 @@ class SaleNotifier extends _$SaleNotifier {
             );
             await SaleTable.saveSingleSale(synced);
 
-            // Optional: Update state to show sync indicator in UI
+            // Update UI with the new sync status (shows the cloud icon)
             final current = state.value ?? [];
             state = AsyncData([
               for (final item in current)

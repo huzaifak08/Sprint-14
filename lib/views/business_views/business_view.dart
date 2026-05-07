@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sprint_14/models/business_model.dart';
 import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
 import 'package:sprint_14/providers/business_provider/business_provider.dart';
-import 'package:sprint_14/views/business_views/business_dashboard_view.dart';
+import 'package:sprint_14/views/business_views/business_dashboard_view/business_dashboard_view.dart';
 import 'package:uuid/uuid.dart';
 
 class BusinessView extends ConsumerWidget {
@@ -150,7 +150,7 @@ class _BusinessCard extends StatelessWidget {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => BusinessDashboardView(business: business),
+              builder: (_) => BusinessDashboardView(businessId: business.id),
             ),
           );
         },

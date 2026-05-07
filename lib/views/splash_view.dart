@@ -9,7 +9,7 @@ import 'package:sprint_14/providers/settings_provider/settings_provider.dart';
 import 'package:sprint_14/providers/user_provider/user_provider.dart';
 import 'package:sprint_14/views/auth/sign_in_view.dart';
 import 'package:sprint_14/views/auth/verify_email_view.dart';
-import 'package:sprint_14/views/business_views/business_dashboard_view.dart';
+import 'package:sprint_14/views/business_views/business_dashboard_view/business_dashboard_view.dart';
 import 'package:sprint_14/views/home_view.dart';
 import 'dart:developer' as dev;
 
@@ -135,7 +135,8 @@ class _SplashViewState extends ConsumerState<SplashView>
                 );
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => BusinessDashboardView(business: business),
+                    builder: (_) =>
+                        BusinessDashboardView(businessId: business.id),
                   ),
                 );
                 return;

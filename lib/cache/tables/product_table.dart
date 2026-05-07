@@ -41,7 +41,7 @@ class ProductTable {
     final maps = await db.query(
       tableName,
       where: 'businessId = ? AND isDeleted = ?',
-      whereArgs: [businessId],
+      whereArgs: [businessId, 0],
     );
     return maps.map(ProductModel.fromJsonDb).toList();
   }
@@ -81,6 +81,13 @@ class ProductTable {
       product.toJsonDb(),
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+  }
+
+  /// Permanently removes a product from the local SQLite database
+  static Future<int> hardDelete(String productId) async {
+    final db = await LocalCacheManager.getDatabase();
+
+    return await db.delete(tableName, where: 'id = ?', whereArgs: [productId]);
   }
 
   static Future<void> deleteAllProducts() async {

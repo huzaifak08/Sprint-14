@@ -10,33 +10,78 @@ part of 'sale_provider.dart';
 // ignore_for_file: type=lint, type=warning
 
 @ProviderFor(SaleNotifier)
-final saleProvider = SaleNotifierProvider._();
+final saleProvider = SaleNotifierFamily._();
 
 final class SaleNotifierProvider
     extends $AsyncNotifierProvider<SaleNotifier, List<SaleModel>> {
-  SaleNotifierProvider._()
-    : super(
-        from: null,
-        argument: null,
-        retry: null,
-        name: r'saleProvider',
-        isAutoDispose: false,
-        dependencies: null,
-        $allTransitiveDependencies: null,
-      );
+  SaleNotifierProvider._({
+    required SaleNotifierFamily super.from,
+    required String super.argument,
+  }) : super(
+         retry: null,
+         name: r'saleProvider',
+         isAutoDispose: false,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
 
   @override
   String debugGetCreateSourceHash() => _$saleNotifierHash();
 
+  @override
+  String toString() {
+    return r'saleProvider'
+        ''
+        '($argument)';
+  }
+
   @$internal
   @override
   SaleNotifier create() => SaleNotifier();
+
+  @override
+  bool operator ==(Object other) {
+    return other is SaleNotifierProvider && other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
 }
 
-String _$saleNotifierHash() => r'dd3e808e556e45c2cb64bdf0924340dce057308c';
+String _$saleNotifierHash() => r'1be9bb00549f4cbf3092d316d2b0373a2a7880d8';
+
+final class SaleNotifierFamily extends $Family
+    with
+        $ClassFamilyOverride<
+          SaleNotifier,
+          AsyncValue<List<SaleModel>>,
+          List<SaleModel>,
+          FutureOr<List<SaleModel>>,
+          String
+        > {
+  SaleNotifierFamily._()
+    : super(
+        retry: null,
+        name: r'saleProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: false,
+      );
+
+  SaleNotifierProvider call(String businessId) =>
+      SaleNotifierProvider._(argument: businessId, from: this);
+
+  @override
+  String toString() => r'saleProvider';
+}
 
 abstract class _$SaleNotifier extends $AsyncNotifier<List<SaleModel>> {
-  FutureOr<List<SaleModel>> build();
+  late final _$args = ref.$arg as String;
+  String get businessId => _$args;
+
+  FutureOr<List<SaleModel>> build(String businessId);
   @$mustCallSuper
   @override
   void runBuild() {
@@ -49,6 +94,6 @@ abstract class _$SaleNotifier extends $AsyncNotifier<List<SaleModel>> {
               Object?,
               Object?
             >;
-    element.handleCreate(ref, build);
+    element.handleCreate(ref, () => build(_$args));
   }
 }
