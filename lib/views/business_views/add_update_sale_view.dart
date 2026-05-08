@@ -223,7 +223,7 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
               (p) => DropdownMenuItem(
                 value: p,
                 child: Text(
-                  p.title.toUpperCase(),
+                  "${p.title.toUpperCase()} (${p.classification})",
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 13,

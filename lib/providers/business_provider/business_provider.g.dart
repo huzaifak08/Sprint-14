@@ -53,3 +53,78 @@ abstract class _$BusinessNotifier extends $AsyncNotifier<List<BusinessModel>> {
     element.handleCreate(ref, build);
   }
 }
+
+@ProviderFor(singleBusiness)
+final singleBusinessProvider = SingleBusinessFamily._();
+
+final class SingleBusinessProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<BusinessModel>,
+          BusinessModel,
+          FutureOr<BusinessModel>
+        >
+    with $FutureModifier<BusinessModel>, $FutureProvider<BusinessModel> {
+  SingleBusinessProvider._({
+    required SingleBusinessFamily super.from,
+    required String super.argument,
+  }) : super(
+         retry: null,
+         name: r'singleBusinessProvider',
+         isAutoDispose: true,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$singleBusinessHash();
+
+  @override
+  String toString() {
+    return r'singleBusinessProvider'
+        ''
+        '($argument)';
+  }
+
+  @$internal
+  @override
+  $FutureProviderElement<BusinessModel> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<BusinessModel> create(Ref ref) {
+    final argument = this.argument as String;
+    return singleBusiness(ref, argument);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is SingleBusinessProvider && other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$singleBusinessHash() => r'c4a29948bc9cc7e1efbc19864d0402350e7861a8';
+
+final class SingleBusinessFamily extends $Family
+    with $FunctionalFamilyOverride<FutureOr<BusinessModel>, String> {
+  SingleBusinessFamily._()
+    : super(
+        retry: null,
+        name: r'singleBusinessProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: true,
+      );
+
+  SingleBusinessProvider call(String businessId) =>
+      SingleBusinessProvider._(argument: businessId, from: this);
+
+  @override
+  String toString() => r'singleBusinessProvider';
+}

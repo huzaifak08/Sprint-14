@@ -151,3 +151,14 @@ class BusinessNotifier extends _$BusinessNotifier {
     }
   }
 }
+
+@riverpod
+Future<BusinessModel> singleBusiness(Ref ref, String businessId) async {
+  List<BusinessModel> businesses = await ref.watch(businessProvider.future);
+
+  BusinessModel buss = businesses.firstWhere(
+    (element) => element.id == businessId,
+  );
+
+  return buss;
+}

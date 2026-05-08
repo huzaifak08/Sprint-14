@@ -93,7 +93,7 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView>
           return CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
-              _buildAppBar(context, ref, uiState, theme),
+              _buildAppBar(context, ref, uiState, widget.businessId, theme),
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(
                   16,
@@ -171,9 +171,11 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView>
     BuildContext context,
     WidgetRef ref,
     DashboardUiState ui,
+    String businessId,
     ThemeData theme,
   ) {
     final notifier = ref.read(dashboardUiProvider.notifier);
+    final businessState = ref.watch(singleBusinessProvider(businessId));
 
     if (ui.isSearching) {
       return SliverAppBar(
@@ -202,7 +204,11 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView>
       backgroundColor: theme.scaffoldBackgroundColor,
       surfaceTintColor: Colors.transparent,
       title: Text(
-        "BUSINESS",
+        businessState.when(
+          data: (business) => business.name,
+          error: (error, stackTrace) => "ERROR",
+          loading: () => "BUSINESS",
+        ),
         style: TextStyle(
           fontWeight: FontWeight.w900,
           fontSize: 14,

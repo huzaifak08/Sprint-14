@@ -97,6 +97,9 @@ class ProductNotifier extends _$ProductNotifier {
     ]);
 
     await ProductTable.saveSingleProduct(local);
+
+    await syncPending(local.businessId);
+
     _performSilentCloudSync(local.businessId);
   }
 
