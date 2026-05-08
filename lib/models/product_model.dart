@@ -3,10 +3,16 @@ class ProductModel {
   final String businessId;
   final String title;
   final bool isTheya;
+
+  /// Determines if the product is 'Open' (Continuous) or 'Fixed' (Limited)
   final String classification;
+
   final double retailPrice;
   final double msrpPrice;
   final String unitType;
+
+  /// New Field: Tracks remaining inventory
+  final double currentStock;
 
   final bool isSynced;
   final DateTime? lastSyncAttempt;
@@ -21,6 +27,7 @@ class ProductModel {
     required this.retailPrice,
     required this.msrpPrice,
     required this.unitType,
+    required this.currentStock, // Added
     required this.isSynced,
     this.lastSyncAttempt,
     required this.isDeleted,
@@ -36,6 +43,7 @@ class ProductModel {
     double? retailPrice,
     double? msrpPrice,
     String? unitType,
+    double? currentStock,
     bool? isSynced,
     DateTime? lastSyncAttempt,
     bool? isDeleted,
@@ -49,6 +57,7 @@ class ProductModel {
       retailPrice: retailPrice ?? this.retailPrice,
       msrpPrice: msrpPrice ?? this.msrpPrice,
       unitType: unitType ?? this.unitType,
+      currentStock: currentStock ?? this.currentStock,
       isSynced: isSynced ?? this.isSynced,
       lastSyncAttempt: lastSyncAttempt ?? this.lastSyncAttempt,
       isDeleted: isDeleted ?? this.isDeleted,
@@ -66,6 +75,7 @@ class ProductModel {
       'retailPrice': retailPrice,
       'msrpPrice': msrpPrice,
       'unitType': unitType,
+      'currentStock': currentStock,
     };
   }
 
@@ -75,10 +85,11 @@ class ProductModel {
       businessId: map['businessId'] ?? '',
       title: map['title'] ?? '',
       isTheya: map['isTheya'] ?? true,
-      classification: map['classification'] ?? '',
+      classification: map['classification'] ?? 'Fixed',
       retailPrice: (map['retailPrice'] as num?)?.toDouble() ?? 0.0,
       msrpPrice: (map['msrpPrice'] as num?)?.toDouble() ?? 0.0,
       unitType: map['unitType'] ?? 'Piece',
+      currentStock: (map['currentStock'] as num?)?.toDouble() ?? 0.0,
       isSynced: true,
       lastSyncAttempt: null,
       isDeleted: false,
@@ -96,6 +107,7 @@ class ProductModel {
       'retailPrice': retailPrice,
       'msrpPrice': msrpPrice,
       'unitType': unitType,
+      'currentStock': currentStock,
       'isSynced': isSynced ? 1 : 0,
       'lastSyncAttempt': lastSyncAttempt?.toIso8601String(),
       'isDeleted': isDeleted ? 1 : 0,
@@ -108,15 +120,31 @@ class ProductModel {
       businessId: json['businessId'] ?? '',
       title: json['title'] ?? '',
       isTheya: (json['isTheya'] ?? 0) == 1,
-      classification: json['classification'] ?? '',
+      classification: json['classification'] ?? 'Fixed',
       retailPrice: (json['retailPrice'] as num?)?.toDouble() ?? 0.0,
       msrpPrice: (json['msrpPrice'] as num?)?.toDouble() ?? 0.0,
       unitType: json['unitType'] ?? 'Piece',
+      currentStock: (json['currentStock'] as num?)?.toDouble() ?? 0.0,
       isSynced: (json['isSynced'] ?? 0) == 1,
       lastSyncAttempt: json['lastSyncAttempt'] != null
           ? DateTime.parse(json['lastSyncAttempt'])
           : null,
       isDeleted: (json['isDeleted'] ?? 0) == 1,
     );
+  }
+
+  // ===================== HELPER LOGIC =====================
+
+  // Inside ProductModel
+  bool get isInfinite {
+    // If it's 'Matching' or 'Open' (depending on how you want to label Atal),
+    // we treat it as infinite stock.
+    return classification == "Matching" || classification == "Open";
+  }
+
+  bool get isAvailableForSale {
+    if (isDeleted) return false;
+    if (isInfinite) return true; // Always show Atal/Matching
+    return currentStock > 0; // Only hide fixed articles (suits) when empty
   }
 }

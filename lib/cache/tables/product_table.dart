@@ -16,6 +16,7 @@ class ProductTable {
         retailPrice REAL NOT NULL,
         msrpPrice REAL NOT NULL,
         unitType TEXT NOT NULL,
+        currentStock REAL NOT NULL,
         isSynced INTEGER NOT NULL,
         lastSyncAttempt TEXT,
         isDeleted INTEGER NOT NULL
@@ -23,6 +24,7 @@ class ProductTable {
     ''');
   }
 
+  /// Saves a list of products using a batch for high performance
   static Future<void> saveAllProducts(List<ProductModel> products) async {
     final db = await LocalCacheManager.getDatabase();
     Batch batch = db.batch();
@@ -36,6 +38,7 @@ class ProductTable {
     await batch.commit(noResult: true);
   }
 
+  /// Fetches all non-deleted products for a business
   static Future<List<ProductModel>> getAllProducts(String businessId) async {
     final db = await LocalCacheManager.getDatabase();
     final maps = await db.query(
@@ -46,15 +49,16 @@ class ProductTable {
     return maps.map(ProductModel.fromJsonDb).toList();
   }
 
-  static Future<List<ProductModel>> getProductsByBusiness(
+  /// Fetches products filtered by placement (Theya vs Inside)
+  static Future<List<ProductModel>> getProductsByPlacement(
     String businessId,
     bool isTheya,
   ) async {
     final db = await LocalCacheManager.getDatabase();
     final maps = await db.query(
       tableName,
-      where: 'businessId = ? AND isTheya = ? AND isDeleted = ?',
-      whereArgs: [businessId, isTheya ? 1 : 0, 0],
+      where: 'businessId = ? AND isTheya = ? AND isDeleted = 0',
+      whereArgs: [businessId, isTheya ? 1 : 0],
     );
     return maps.map(ProductModel.fromJsonDb).toList();
   }
@@ -67,13 +71,14 @@ class ProductTable {
 
     final maps = await db.query(
       tableName,
-      where: 'businessId = ? AND isSynced = ?',
-      whereArgs: [businessId, 0],
+      where: 'businessId = ? AND isSynced = 0',
+      whereArgs: [businessId],
     );
 
     return maps.map(ProductModel.fromJsonDb).toList();
   }
 
+  /// Saves or updates a single product
   static Future<void> saveSingleProduct(ProductModel product) async {
     final db = await LocalCacheManager.getDatabase();
     await db.insert(
@@ -90,6 +95,7 @@ class ProductTable {
     return await db.delete(tableName, where: 'id = ?', whereArgs: [productId]);
   }
 
+  /// Clears the entire table
   static Future<void> deleteAllProducts() async {
     final db = await LocalCacheManager.getDatabase();
     await db.delete(tableName);

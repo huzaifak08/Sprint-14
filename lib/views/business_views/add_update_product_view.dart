@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sprint_14/models/product_model.dart';
 import 'package:sprint_14/providers/product_provider/product_provider.dart';
@@ -25,9 +26,10 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
   late TextEditingController _titleController;
   late TextEditingController _retailController;
   late TextEditingController _msrpController;
+  late TextEditingController _stockController;
 
   bool _isTheya = true;
-  String _classification = "2-PC";
+  String _classification = "Fixed"; // Options: "Fixed", "Open", "Matching"
   String _unitType = "Piece";
 
   @override
@@ -36,23 +38,54 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
     _titleController = TextEditingController(text: widget.product?.title);
     _retailController = TextEditingController(
       text: widget.product?.retailPrice != null
-          ? widget.product!.retailPrice.toString()
+          ? widget.product!.retailPrice.toStringAsFixed(0)
           : "",
     );
     _msrpController = TextEditingController(
       text: widget.product?.msrpPrice != null
-          ? widget.product!.msrpPrice.toString()
+          ? widget.product!.msrpPrice.toStringAsFixed(0)
           : "",
     );
+    _stockController = TextEditingController(
+      text: widget.product?.currentStock != null
+          ? widget.product!.currentStock.toString()
+          : "",
+    );
+
     if (widget.product != null) {
       _isTheya = widget.product!.isTheya;
-      _classification = widget.product!.classification;
       _unitType = widget.product!.unitType;
+
+      // MIGRATION LOGIC: Map old categories to new Stock Types
+      final oldClass = widget.product!.classification;
+      if (oldClass == "Matching" || oldClass == "Fancy") {
+        _classification = "Matching"; // Infinite Stock
+      } else if (oldClass == "Open" ||
+          _unitType == "Meter" ||
+          _unitType == "Gazz") {
+        _classification = "Open"; // Length Tracked
+      } else {
+        _classification = "Fixed"; // Piece Tracked
+      }
     }
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _retailController.dispose();
+    _msrpController.dispose();
+    _stockController.dispose();
+    super.dispose();
   }
 
   void _handleSave() {
     if (_formKey.currentState!.validate()) {
+      // Logic: Matching items don't track stock (Infinite)
+      double stockValue = (_classification == "Matching")
+          ? 999.0
+          : (double.tryParse(_stockController.text) ?? 0.0);
+
       final product = ProductModel(
         id: widget.product?.id ?? const Uuid().v4(),
         businessId: widget.businessId,
@@ -62,6 +95,7 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
         retailPrice: double.parse(_retailController.text),
         msrpPrice: double.parse(_msrpController.text),
         unitType: _unitType,
+        currentStock: stockValue,
         isSynced: false,
         isDeleted: false,
       );
@@ -119,11 +153,33 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
           children: [
-            // 1. Placement Selector (High Visibility)
             _buildPlacementSelector(theme),
             const SizedBox(height: 32),
 
-            // 2. Identity Section
+            // INVENTORY SECTION
+            _SectionHeader(
+              title: "INVENTORY LOGIC",
+              icon: Icons.warehouse_outlined,
+            ),
+            const SizedBox(height: 16),
+            _buildTypeSelectors(),
+
+            // Only show Stock field if the item is not "Infinite" (Matching)
+            if (_classification != "Matching") ...[
+              const SizedBox(height: 24),
+              _buildPremiumTextField(
+                controller: _stockController,
+                label: _classification == "Fixed"
+                    ? "Available Pieces"
+                    : "Available Length",
+                hint: _classification == "Fixed" ? "e.g., 6" : "e.g., 40.0",
+                icon: Icons.numbers_rounded,
+                isNumber: true,
+              ),
+            ],
+            const SizedBox(height: 32),
+
+            // IDENTITY SECTION
             _SectionHeader(
               title: "IDENTITY",
               icon: Icons.label_important_outline,
@@ -131,21 +187,18 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
             const SizedBox(height: 16),
             _buildPremiumTextField(
               controller: _titleController,
-              label: "Product Name",
-              hint: "e.g., Midnight Silk 3-PC",
+              label: "Display Name",
+              hint: "e.g., Atal (All Colors) or Zara Suit",
               icon: Icons.inventory_2_rounded,
             ),
-            const SizedBox(height: 20),
-            _buildTypeSelectors(),
             const SizedBox(height: 32),
 
-            // 3. Financial Section
+            // FINANCIAL SECTION
             _SectionHeader(title: "FINANCIALS", icon: Icons.payments_outlined),
             const SizedBox(height: 16),
             _buildPriceInputs(),
             const SizedBox(height: 48),
 
-            // 4. Action Button
             _buildSubmitButton(theme),
             const SizedBox(height: 40),
           ],
@@ -165,7 +218,6 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
         children: [
           _PlacementOption(
             title: "THEYA",
-            subtitle: "Front Shop",
             isActive: _isTheya,
             activeColor: Colors.amber.shade700,
             icon: Icons.storefront_rounded,
@@ -173,7 +225,6 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
           ),
           _PlacementOption(
             title: "INSIDE",
-            subtitle: "Premium",
             isActive: !_isTheya,
             activeColor: theme.colorScheme.primary,
             icon: Icons.chair_rounded,
@@ -189,9 +240,11 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
       children: [
         Expanded(
           child: _PremiumDropdown(
-            label: "Class",
-            value: _classification,
-            items: ["1-PC", "2-PC", "3-PC", "Fancy", "Matching"],
+            label: "Stock Behavior",
+            value: (["Fixed", "Open", "Matching"].contains(_classification))
+                ? _classification
+                : "Fixed",
+            items: const ["Fixed", "Open", "Matching"],
             onChanged: (v) => setState(() => _classification = v!),
           ),
         ),
@@ -200,7 +253,7 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
           child: _PremiumDropdown(
             label: "Unit",
             value: _unitType,
-            items: ["Piece", "Meter", "Gazz"],
+            items: const ["Piece", "Meter", "Gazz"],
             onChanged: (v) => setState(() => _unitType = v!),
           ),
         ),
@@ -214,7 +267,7 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
         Expanded(
           child: _buildPremiumTextField(
             controller: _retailController,
-            label: "Cost Price",
+            label: "Our Cost",
             hint: "0",
             isNumber: true,
             prefix: "PKR",
@@ -257,9 +310,9 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
           ),
           elevation: 0,
         ),
-        child: const Text(
-          "FINALIZE PRODUCT",
-          style: TextStyle(
+        child: Text(
+          widget.product == null ? "FINALIZE PRODUCT" : "UPDATE PRODUCT",
+          style: const TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w900,
             letterSpacing: 1.5,
@@ -291,19 +344,26 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
         const SizedBox(height: 8),
         TextFormField(
           controller: controller,
-          keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+          keyboardType: isNumber
+              ? const TextInputType.numberWithOptions(decimal: true)
+              : TextInputType.text,
+          inputFormatters: isNumber
+              ? [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))]
+              : [],
           decoration: InputDecoration(
             hintText: hint,
             prefixIcon: icon != null
                 ? Icon(icon, size: 20)
                 : (prefix != null
-                      ? Center(
-                          widthFactor: 1,
+                      ? Container(
+                          width: 40,
+                          alignment: Alignment.center,
                           child: Text(
                             prefix,
                             style: const TextStyle(
-                              fontSize: 12,
+                              fontSize: 10,
                               fontWeight: FontWeight.bold,
+                              color: Colors.grey,
                             ),
                           ),
                         )
@@ -322,7 +382,10 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
               ),
             ),
           ),
-          validator: (v) => v!.isEmpty ? "Required" : null,
+          validator: (v) {
+            if (v == null || v.isEmpty) return "Required";
+            return null;
+          },
         ),
       ],
     );
@@ -332,9 +395,10 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text("Remove Product?"),
         content: const Text(
-          "This action will archive the product and it will no longer appear in the catalog.",
+          "This product will be archived and hidden from the catalog.",
         ),
         actions: [
           TextButton(
@@ -359,7 +423,6 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
 
 class _PlacementOption extends StatelessWidget {
   final String title;
-  final String subtitle;
   final bool isActive;
   final Color activeColor;
   final IconData icon;
@@ -367,7 +430,6 @@ class _PlacementOption extends StatelessWidget {
 
   const _PlacementOption({
     required this.title,
-    required this.subtitle,
     required this.isActive,
     required this.activeColor,
     required this.icon,
@@ -385,15 +447,6 @@ class _PlacementOption extends StatelessWidget {
           decoration: BoxDecoration(
             color: isActive ? activeColor : Colors.transparent,
             borderRadius: BorderRadius.circular(16),
-            boxShadow: isActive
-                ? [
-                    BoxShadow(
-                      color: activeColor.withValues(alpha: 0.3),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ]
-                : [],
           ),
           child: Column(
             children: [
@@ -409,15 +462,6 @@ class _PlacementOption extends StatelessWidget {
                   color: isActive ? Colors.white : Colors.grey,
                   fontWeight: FontWeight.w900,
                   fontSize: 12,
-                ),
-              ),
-              Text(
-                subtitle,
-                style: TextStyle(
-                  color: isActive
-                      ? Colors.white.withValues(alpha: 0.7)
-                      : Colors.grey.withValues(alpha: 0.5),
-                  fontSize: 10,
                 ),
               ),
             ],

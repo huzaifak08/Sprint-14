@@ -27,7 +27,7 @@ class LocalCacheManager {
 
     return openDatabase(
       path,
-      version: 3, // Increment version number when schema changes
+      version: 4, // Increment version number when schema changes
       onCreate: (db, version) async {
         // await ProjectTable.createTable(db);
         await LedgerTable.createTable(db);
@@ -43,6 +43,20 @@ class LocalCacheManager {
           await ProductTable.createTable(db);
           await SaleTable.createTable(db);
           await SettingsTable.createTable(db);
+        }
+
+        if (oldVersion < 4) {
+          try {
+            await db.execute(
+              "ALTER TABLE products ADD COLUMN currentStock REAL NOT NULL DEFAULT 0.0",
+            );
+            dev.log(
+              "Database Upgraded: Added currentStock to products table",
+              name: "init Cache",
+            );
+          } catch (e) {
+            dev.log("Migration Error: $e", name: "init Cache");
+          }
         }
       },
     );
