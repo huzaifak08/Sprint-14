@@ -18,7 +18,6 @@ class ProductNotifier extends _$ProductNotifier {
 
     // 2. Phase 1: Instant Cache Load (Source of Truth for Offline)
     final cache = await ProductTable.getAllProducts(businessId);
-    dev.log(cache[0].title, name: "Cache First Product");
 
     // 3. Phase 2: Fire and forget the cloud sync
     _performSilentCloudSync(businessId);

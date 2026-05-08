@@ -19,7 +19,9 @@ class CategorySelector extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+          color: theme.colorScheme.surfaceContainerHighest.withValues(
+            alpha: 0.3,
+          ),
           borderRadius: BorderRadius.circular(16),
         ),
         child: Row(
@@ -51,7 +53,7 @@ class CategorySelector extends StatelessWidget {
             boxShadow: active
                 ? [
                     BoxShadow(
-                      color: color.withOpacity(0.3),
+                      color: color.withValues(alpha: 0.3),
                       blurRadius: 8,
                       offset: const Offset(0, 4),
                     ),
@@ -65,7 +67,7 @@ class CategorySelector extends StatelessWidget {
               fontSize: 12,
               fontWeight: FontWeight.w900,
               letterSpacing: 1,
-              color: active ? Colors.white : color.withOpacity(0.6),
+              color: active ? Colors.white : color.withValues(alpha: 0.6),
             ),
           ),
         ),

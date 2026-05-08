@@ -101,7 +101,7 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
               icon: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.1),
+                  color: Colors.red.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
@@ -158,7 +158,7 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
     return Container(
       padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceVariant.withOpacity(0.5),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
@@ -241,7 +241,7 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: theme.colorScheme.primary.withOpacity(0.3),
+            color: theme.colorScheme.primary.withValues(alpha: 0.3),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -309,7 +309,7 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
                         )
                       : null),
             filled: true,
-            fillColor: Colors.grey.withOpacity(0.05),
+            fillColor: Colors.grey.withValues(alpha: 0.05),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
               borderSide: BorderSide.none,
@@ -388,7 +388,7 @@ class _PlacementOption extends StatelessWidget {
             boxShadow: isActive
                 ? [
                     BoxShadow(
-                      color: activeColor.withOpacity(0.3),
+                      color: activeColor.withValues(alpha: 0.3),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
                     ),
@@ -415,8 +415,8 @@ class _PlacementOption extends StatelessWidget {
                 subtitle,
                 style: TextStyle(
                   color: isActive
-                      ? Colors.white.withOpacity(0.7)
-                      : Colors.grey.withOpacity(0.5),
+                      ? Colors.white.withValues(alpha: 0.7)
+                      : Colors.grey.withValues(alpha: 0.5),
                   fontSize: 10,
                 ),
               ),
@@ -483,7 +483,7 @@ class _PremiumDropdown extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           decoration: BoxDecoration(
-            color: Colors.grey.withOpacity(0.05),
+            color: Colors.grey.withValues(alpha: 0.05),
             borderRadius: BorderRadius.circular(16),
           ),
           child: DropdownButtonHideUnderline(

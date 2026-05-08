@@ -64,12 +64,12 @@ class QuickActionHeader extends StatelessWidget {
             border: Border.all(
               color: isPrimary
                   ? Colors.transparent
-                  : theme.colorScheme.primary.withOpacity(0.3),
+                  : theme.colorScheme.primary.withValues(alpha: 0.3),
             ),
             boxShadow: isPrimary
                 ? [
                     BoxShadow(
-                      color: theme.colorScheme.primary.withOpacity(0.3),
+                      color: theme.colorScheme.primary.withValues(alpha: 0.3),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     ),

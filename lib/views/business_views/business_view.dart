@@ -62,7 +62,7 @@ class BusinessView extends ConsumerWidget {
 
   void _showAddBusinessSheet(BuildContext context, WidgetRef ref) {
     final nameController = TextEditingController();
-    String? _currentUid = ref.read(authControllerProvider).value?.uid;
+    String? currentUid = ref.read(authControllerProvider).value?.uid;
 
     showModalBottomSheet(
       context: context,
@@ -93,7 +93,7 @@ class BusinessView extends ConsumerWidget {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () {
-                  if (_currentUid == null) return;
+                  if (currentUid == null) return;
 
                   if (nameController.text.isNotEmpty) {
                     final newBusiness = BusinessModel(
@@ -102,7 +102,7 @@ class BusinessView extends ConsumerWidget {
                       type: 'Clothing',
                       currency: 'PKR',
                       createdAt: DateTime.now(),
-                      ownerId: _currentUid,
+                      ownerId: currentUid,
                       isSynced: false,
                       isDeleted: false,
                     );

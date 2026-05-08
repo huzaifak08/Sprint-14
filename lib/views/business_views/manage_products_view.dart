@@ -118,7 +118,7 @@ class _ManageProductsViewState extends ConsumerState<ManageProductsView> {
           Icon(
             Icons.inventory_2_outlined,
             size: 48,
-            color: theme.colorScheme.outline.withOpacity(0.3),
+            color: theme.colorScheme.outline.withValues(alpha: 0.3),
           ),
           const SizedBox(height: 12),
           Text(
@@ -169,7 +169,9 @@ class _ProductCatalogCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.1)),
+        border: Border.all(
+          color: theme.colorScheme.outline.withValues(alpha: 0.1),
+        ),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
@@ -189,7 +191,7 @@ class _ProductCatalogCard extends StatelessWidget {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: accentColor.withOpacity(0.1),
+                  color: accentColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Center(

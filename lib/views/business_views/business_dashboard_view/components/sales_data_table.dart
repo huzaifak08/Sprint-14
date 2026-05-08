@@ -26,7 +26,9 @@ class SalesDataTable extends ConsumerWidget {
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.05)),
+        border: Border.all(
+          color: theme.colorScheme.outline.withValues(alpha: 0.05),
+        ),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
@@ -90,8 +92,8 @@ class SalesDataTable extends ConsumerWidget {
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
-                                color: theme.colorScheme.onSurface.withOpacity(
-                                  0.4,
+                                color: theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.4,
                                 ),
                               ),
                             ),
@@ -119,8 +121,8 @@ class SalesDataTable extends ConsumerWidget {
                       ),
                       decoration: BoxDecoration(
                         color: isProfitable
-                            ? theme.colorScheme.primary.withOpacity(0.1)
-                            : theme.colorScheme.error.withOpacity(0.1),
+                            ? theme.colorScheme.primary.withValues(alpha: 0.1)
+                            : theme.colorScheme.error.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
@@ -141,7 +143,9 @@ class SalesDataTable extends ConsumerWidget {
                       sale.quantity.toStringAsFixed(1),
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
-                        color: theme.colorScheme.onSurface.withOpacity(0.7),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.7,
+                        ),
                       ),
                     ),
                   ),

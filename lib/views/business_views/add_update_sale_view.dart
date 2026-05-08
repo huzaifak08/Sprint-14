@@ -207,11 +207,11 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
 
     return Container(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(20),
       ),
       child: DropdownButtonFormField<ProductModel>(
-        value: _selectedProduct,
+        initialValue: _selectedProduct,
         hint: Text("Select ${_isTheyaFilter ? 'Theya' : 'Inside'} Item..."),
         decoration: const InputDecoration(
           prefixIcon: Icon(Icons.inventory_2_outlined),
@@ -257,10 +257,10 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: theme.colorScheme.primary.withOpacity(0.05),
+            color: theme.colorScheme.primary.withValues(alpha: 0.05),
             borderRadius: BorderRadius.circular(24),
             border: Border.all(
-              color: theme.colorScheme.primary.withOpacity(0.1),
+              color: theme.colorScheme.primary.withValues(alpha: 0.1),
             ),
           ),
           child: Column(
@@ -340,7 +340,7 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceVariant.withOpacity(0.2),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
@@ -351,7 +351,7 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
             style: TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.w900,
-              color: theme.colorScheme.primary.withOpacity(0.6),
+              color: theme.colorScheme.primary.withValues(alpha: 0.6),
             ),
           ),
           const SizedBox(height: 4),
@@ -391,9 +391,11 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceVariant.withOpacity(0.2),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.1)),
+        border: Border.all(
+          color: theme.colorScheme.outline.withValues(alpha: 0.1),
+        ),
       ),
       child: Column(
         children: [
@@ -429,7 +431,7 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
               Container(
                 height: 30,
                 width: 1,
-                color: theme.colorScheme.outline.withOpacity(0.2),
+                color: theme.colorScheme.outline.withValues(alpha: 0.2),
                 margin: const EdgeInsets.symmetric(horizontal: 16),
               ),
               _statBlock(
@@ -482,7 +484,9 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         border: Border(
-          top: BorderSide(color: theme.colorScheme.outline.withOpacity(0.05)),
+          top: BorderSide(
+            color: theme.colorScheme.outline.withValues(alpha: 0.05),
+          ),
         ),
       ),
       child: SizedBox(

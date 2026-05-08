@@ -17,18 +17,20 @@ class SyncStatusBadge extends StatelessWidget {
         // When not synced, we show a subtle outline like a "waiting" state
         border: !isSynced
             ? Border.all(
-                color: theme.colorScheme.onSurface.withOpacity(0.1),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.1),
                 width: 1.5,
               )
             : null,
-        color: isSynced ? primaryColor.withOpacity(0.1) : Colors.transparent,
+        color: isSynced
+            ? primaryColor.withValues(alpha: 0.1)
+            : Colors.transparent,
       ),
       child: Icon(
         isSynced ? Icons.cloud_done_rounded : Icons.cloud_upload_outlined,
         size: 14,
         color: isSynced
             ? primaryColor
-            : theme.colorScheme.onSurface.withOpacity(0.2),
+            : theme.colorScheme.onSurface.withValues(alpha: 0.2),
       ),
     );
   }
