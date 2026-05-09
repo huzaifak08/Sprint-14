@@ -49,28 +49,56 @@ class SaleNotifier extends _$SaleNotifier {
 
     try {
       final connectivity = await Connectivity().checkConnectivity();
-      if (connectivity.contains(ConnectivityResult.none)) {
-        dev.log("Device offline, cloud sync skipped.", name: "SaleProvider");
-        return;
-      }
+      if (connectivity.contains(ConnectivityResult.none)) return;
 
       final service = SaleService(uid: user.uid);
+
+      // 1. 🔥 PUSH LOCAL CHANGES FIRST
+      // This ensures that when we fetch cloud data next, our new sale is likely already there.
+      await syncPending(businessId);
+
+      // 2. Fetch fresh cloud data
       dev.log("Fetching fresh cloud data...", name: "SaleProvider");
       final cloudSales = await service.getBusinessSales(businessId);
 
-      // Persist to local DB
+      // 3. Persist to local DB
       await SaleTable.saveAllSales(cloudSales);
 
-      // 🔥 UPDATE UI LIVE: If there are changes, they pop up now
-      state = AsyncValue.data(cloudSales);
-      dev.log("UI updated with fresh cloud data", name: "SaleProvider");
+      // 4. 🔥 SMART MERGE: Check for local sales that are still 'isSynced = false'
+      // This handles the case where syncPending is still running or failed.
+      final unsynced = await SaleTable.getUnsyncedSalesByBusiness(businessId);
 
-      // Push any local changes that were made while offline
-      syncPending(businessId);
+      if (unsynced.isEmpty) {
+        state = AsyncValue.data(cloudSales);
+      } else {
+        dev.log(
+          "Merging ${unsynced.length} unsynced sales into UI",
+          name: "SaleProvider",
+        );
+
+        // Create a map of cloud sales for quick lookup
+        final merged = [...cloudSales];
+
+        for (var local in unsynced) {
+          final index = merged.indexWhere((s) => s.id == local.id);
+          if (index != -1) {
+            // If it exists in both, prefer the local version (it has the correct sync status)
+            merged[index] = local;
+          } else if (!local.isDeleted) {
+            // If it's a brand new local sale not yet on the cloud, insert it at the top
+            merged.insert(0, local);
+          }
+        }
+
+        // Sort the final list by date to ensure the UI stays ordered
+        merged.sort((a, b) => b.dateTime.compareTo(a.dateTime));
+
+        state = AsyncValue.data(merged);
+      }
+
+      dev.log("UI updated with Smart Merge data", name: "SaleProvider");
     } catch (e) {
       dev.log("Silent Cloud Sync Failed: $e", name: "SaleProvider");
-      // We don't update 'state' with an error here because the user
-      // is already looking at perfectly fine cache data.
     }
   }
 

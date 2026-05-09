@@ -14,7 +14,7 @@ class DashboardUiState {
     this.isSearching = false,
     this.isSelectionMode = false,
     this.searchQuery = "",
-    this.activeFilter = DashboardFilterType.all,
+    this.activeFilter = DashboardFilterType.daily,
     DateTime? selectedDate,
     this.selectedIds = const {},
   }) : selectedDate = selectedDate ?? DateTime.now();

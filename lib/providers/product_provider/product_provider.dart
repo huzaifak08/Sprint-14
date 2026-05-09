@@ -46,31 +46,42 @@ class ProductNotifier extends _$ProductNotifier {
 
     try {
       final connectivity = await Connectivity().checkConnectivity();
-      if (connectivity.contains(ConnectivityResult.none)) {
-        dev.log(
-          "Device offline, skipping product cloud sync.",
-          name: "ProductProvider",
-        );
-        return;
-      }
+      if (connectivity.contains(ConnectivityResult.none)) return;
 
       final service = ProductService(uid: user.uid);
-      dev.log("Fetching fresh products from Cloud...", name: "ProductProvider");
+
+      // 1. Push local changes FIRST to ensure cloud is up to date
+      await syncPending(businessId);
+
+      // 2. Fetch fresh products from Cloud
       final cloudProducts = await service.getBusinessProducts(businessId);
 
-      // Save new cloud data to local SQLite
+      // 3. Save to SQLite
       await ProductTable.saveAllProducts(cloudProducts);
 
-      // Update UI live if cloud data is different
-      state = AsyncValue.data(cloudProducts);
-
-      // Push any pending local changes (Syncing local to cloud)
-      syncPending(businessId);
-    } catch (e) {
-      dev.log(
-        "Silent Product Sync Failed (Normal if offline): $e",
-        name: "ProductProvider",
+      // 4. 🔥 SMART MERGE: Check for any local changes that haven't synced yet
+      // This prevents the cloud from "erasing" products that are still in flight
+      final unsynced = await ProductTable.getUnsyncedProductsByBusiness(
+        businessId,
       );
+
+      if (unsynced.isEmpty) {
+        state = AsyncValue.data(cloudProducts);
+      } else {
+        // Merge: Use cloud data, but override with local unsynced versions
+        final merged = [...cloudProducts];
+        for (var local in unsynced) {
+          final index = merged.indexWhere((p) => p.id == local.id);
+          if (index != -1) {
+            merged[index] = local;
+          } else if (!local.isDeleted) {
+            merged.insert(0, local);
+          }
+        }
+        state = AsyncValue.data(merged);
+      }
+    } catch (e) {
+      dev.log("Silent Product Sync Failed: $e", name: "ProductProvider");
     }
   }
 
