@@ -1,3 +1,4 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 final String usersCollection = "users";
@@ -21,6 +22,16 @@ final allSteps = [
   'Step 9: Go Live',
   'Step 10: Delivery',
 ];
+
+final FirebaseOptions options = FirebaseOptions(
+  apiKey: "AIzaSyBAYi7_tTVi9Wbz6QOu4SAxYiM3U7saCNs",
+  authDomain: "sprint14-d3ab2.firebaseapp.com",
+  projectId: "sprint14-d3ab2",
+  storageBucket: "sprint14-d3ab2.firebasestorage.app",
+  messagingSenderId: "911681711269",
+  appId: "1:911681711269:web:36bac815263e2761d9f14c",
+  measurementId: "G-GHZZKZ65BF",
+);
 
 final List<String> transactionCategories = [
   "Food",

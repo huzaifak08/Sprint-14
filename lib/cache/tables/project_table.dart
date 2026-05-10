@@ -32,6 +32,7 @@ class ProjectTable {
     List<ProjectModel> projects,
   ) async {
     final db = await LocalCacheManager.getDatabase();
+    if (db == null) return;
     Batch batch = db.batch();
     for (var project in projects) {
       batch.insert(
@@ -45,6 +46,7 @@ class ProjectTable {
 
   static Future<void> saveSingleProject(ProjectModel project) async {
     final db = await LocalCacheManager.getDatabase();
+    if (db == null) return;
     await db.insert(
       tableName,
       project.toJsonDb(),
@@ -54,43 +56,44 @@ class ProjectTable {
 
   static Future<List<ProjectModel>> getUnsyncedProjects() async {
     final db = await LocalCacheManager.getDatabase();
+    if (db == null) return [];
     final maps = await db.query(
       tableName,
       where: 'isSynced = ?',
       whereArgs: [0],
     );
-
     return maps.map(ProjectModel.fromJsonDb).toList();
   }
 
   static Future<List<ProjectModel>> getAllProjectsFromCache() async {
     final db = await LocalCacheManager.getDatabase();
+    if (db == null) return [];
     final maps = await db.query(tableName);
-    return List.generate(maps.length, (i) => ProjectModel.fromJsonDb(maps[i]));
+    return maps.map(ProjectModel.fromJsonDb).toList();
   }
 
   static Future<ProjectModel?> getSingleProjectById(String projectId) async {
     final db = await LocalCacheManager.getDatabase();
-
+    if (db == null) return null;
     final maps = await db.query(
       tableName,
       where: 'id = ?',
       whereArgs: [projectId],
       limit: 1,
     );
-
     if (maps.isEmpty) return null;
-
     return ProjectModel.fromJsonDb(maps.first);
   }
 
   static Future<void> deleteSingleProject(String projectId) async {
     final db = await LocalCacheManager.getDatabase();
+    if (db == null) return;
     await db.delete(tableName, where: 'id = ?', whereArgs: [projectId]);
   }
 
   static Future<void> deleteAllProjects() async {
     final db = await LocalCacheManager.getDatabase();
+    if (db == null) return;
     await db.delete(tableName);
   }
 }

@@ -1,9 +1,11 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sprint_14/cache/init_cache.dart';
 import 'package:sprint_14/helpers/app_data.dart';
+import 'package:sprint_14/helpers/constants.dart';
 import 'package:sprint_14/helpers/theme.dart';
 import 'package:sprint_14/providers/app_provider_container.dart';
 import 'package:sprint_14/providers/settings_provider/settings_provider.dart';
@@ -18,9 +20,15 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Initialize Cache:
-  await LocalCacheManager.initDatabase();
+  if (!kIsWeb) {
+    await LocalCacheManager.initDatabase();
+  }
 
-  await Firebase.initializeApp();
+  if (kIsWeb) {
+    await Firebase.initializeApp(options: options);
+  } else {
+    await Firebase.initializeApp();
+  }
 
   // Notifications:
   FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);

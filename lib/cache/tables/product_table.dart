@@ -24,9 +24,9 @@ class ProductTable {
     ''');
   }
 
-  /// Saves a list of products using a batch for high performance
   static Future<void> saveAllProducts(List<ProductModel> products) async {
     final db = await LocalCacheManager.getDatabase();
+    if (db == null) return;
     Batch batch = db.batch();
     for (var product in products) {
       batch.insert(
@@ -38,9 +38,9 @@ class ProductTable {
     await batch.commit(noResult: true);
   }
 
-  /// Fetches all non-deleted products for a business
   static Future<List<ProductModel>> getAllProducts(String businessId) async {
     final db = await LocalCacheManager.getDatabase();
+    if (db == null) return [];
     final maps = await db.query(
       tableName,
       where: 'businessId = ? AND isDeleted = ?',
@@ -49,12 +49,12 @@ class ProductTable {
     return maps.map(ProductModel.fromJsonDb).toList();
   }
 
-  /// Fetches products filtered by placement (Theya vs Inside)
   static Future<List<ProductModel>> getProductsByPlacement(
     String businessId,
     bool isTheya,
   ) async {
     final db = await LocalCacheManager.getDatabase();
+    if (db == null) return [];
     final maps = await db.query(
       tableName,
       where: 'businessId = ? AND isTheya = ? AND isDeleted = 0',
@@ -63,24 +63,22 @@ class ProductTable {
     return maps.map(ProductModel.fromJsonDb).toList();
   }
 
-  /// Gets all products for a specific business waiting for cloud sync
   static Future<List<ProductModel>> getUnsyncedProductsByBusiness(
     String businessId,
   ) async {
     final db = await LocalCacheManager.getDatabase();
-
+    if (db == null) return [];
     final maps = await db.query(
       tableName,
       where: 'businessId = ? AND isSynced = 0',
       whereArgs: [businessId],
     );
-
     return maps.map(ProductModel.fromJsonDb).toList();
   }
 
-  /// Saves or updates a single product
   static Future<void> saveSingleProduct(ProductModel product) async {
     final db = await LocalCacheManager.getDatabase();
+    if (db == null) return;
     await db.insert(
       tableName,
       product.toJsonDb(),
@@ -88,16 +86,15 @@ class ProductTable {
     );
   }
 
-  /// Permanently removes a product from the local SQLite database
   static Future<int> hardDelete(String productId) async {
     final db = await LocalCacheManager.getDatabase();
-
+    if (db == null) return 0;
     return await db.delete(tableName, where: 'id = ?', whereArgs: [productId]);
   }
 
-  /// Clears the entire table
   static Future<void> deleteAllProducts() async {
     final db = await LocalCacheManager.getDatabase();
+    if (db == null) return;
     await db.delete(tableName);
   }
 }

@@ -23,6 +23,7 @@ class BusinessTable {
 
   static Future<void> saveSingleBusiness(BusinessModel business) async {
     final db = await LocalCacheManager.getDatabase();
+    if (db == null) return;
     await db.insert(
       tableName,
       business.toJsonDb(),
@@ -32,6 +33,7 @@ class BusinessTable {
 
   static Future<List<BusinessModel>> getAllBusinessesFromCache() async {
     final db = await LocalCacheManager.getDatabase();
+    if (db == null) return [];
     final maps = await db.query(
       tableName,
       where: 'isDeleted = ?',
@@ -40,15 +42,13 @@ class BusinessTable {
     return maps.map(BusinessModel.fromJsonDb).toList();
   }
 
-  /// Bulk save for syncing from cloud
   static Future<void> saveAllFetchedBusinesses(
     List<BusinessModel> businesses,
   ) async {
     final db = await LocalCacheManager.getDatabase();
+    if (db == null) return;
 
-    // Using a batch for performance when handling multiple shop profiles
     Batch batch = db.batch();
-
     for (var business in businesses) {
       batch.insert(
         tableName,
@@ -56,29 +56,29 @@ class BusinessTable {
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
     }
-
     await batch.commit(noResult: true);
   }
 
-  /// Gets all business profiles waiting for cloud sync
   static Future<List<BusinessModel>> getUnsyncedBusinesses() async {
     final db = await LocalCacheManager.getDatabase();
+    if (db == null) return [];
     final maps = await db.query(
       tableName,
       where: 'isSynced = ?',
       whereArgs: [0],
     );
-
     return maps.map(BusinessModel.fromJsonDb).toList();
   }
 
   static Future<void> hardDelete(String id) async {
     final db = await LocalCacheManager.getDatabase();
+    if (db == null) return;
     await db.delete(tableName, where: 'id = ?', whereArgs: [id]);
   }
 
   static Future<void> deleteAllBusinesses() async {
     final db = await LocalCacheManager.getDatabase();
+    if (db == null) return;
     await db.delete(tableName);
   }
 }

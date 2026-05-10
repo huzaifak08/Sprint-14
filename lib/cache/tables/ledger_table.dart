@@ -23,9 +23,9 @@ class LedgerTable {
     ''');
   }
 
-  /// Bulk save for syncing from cloud
   static Future<void> saveAllFetchedLedgers(List<LedgerModel> ledgers) async {
     final db = await LocalCacheManager.getDatabase();
+    if (db == null) return;
     Batch batch = db.batch();
     for (var ledger in ledgers) {
       batch.insert(
@@ -37,9 +37,9 @@ class LedgerTable {
     await batch.commit(noResult: true);
   }
 
-  /// Saves or updates a single transaction
   static Future<void> saveSingleLedger(LedgerModel ledger) async {
     final db = await LocalCacheManager.getDatabase();
+    if (db == null) return;
     await db.insert(
       tableName,
       ledger.toJsonDb(),
@@ -47,49 +47,46 @@ class LedgerTable {
     );
   }
 
-  /// Gets all transactions waiting for cloud sync
   static Future<List<LedgerModel>> getUnsyncedLedgers() async {
     final db = await LocalCacheManager.getDatabase();
+    if (db == null) return [];
     final maps = await db.query(
       tableName,
       where: 'isSynced = ?',
       whereArgs: [0],
     );
-
     return maps.map(LedgerModel.fromJsonDb).toList();
   }
 
-  /// Loads the entire ledger for the UI
   static Future<List<LedgerModel>> getAllLedgersFromCache() async {
     final db = await LocalCacheManager.getDatabase();
-    // We order by dateTime descending so newest expenses show first
+    if (db == null) return [];
     final maps = await db.query(tableName, orderBy: 'dateTime DESC');
-    return List.generate(maps.length, (i) => LedgerModel.fromJsonDb(maps[i]));
+    return maps.map(LedgerModel.fromJsonDb).toList();
   }
 
   static Future<LedgerModel?> getSingleLedgerById(String ledgerId) async {
     final db = await LocalCacheManager.getDatabase();
-
+    if (db == null) return null;
     final maps = await db.query(
       tableName,
       where: 'id = ?',
       whereArgs: [ledgerId],
       limit: 1,
     );
-
     if (maps.isEmpty) return null;
-
     return LedgerModel.fromJsonDb(maps.first);
   }
 
-  /// Hard delete from local DB (used after Cloud deletion confirmation)
   static Future<void> hardDelete(String ledgerId) async {
     final db = await LocalCacheManager.getDatabase();
+    if (db == null) return;
     await db.delete(tableName, where: 'id = ?', whereArgs: [ledgerId]);
   }
 
   static Future<void> deleteAllLedgers() async {
     final db = await LocalCacheManager.getDatabase();
+    if (db == null) return;
     await db.delete(tableName);
   }
 }

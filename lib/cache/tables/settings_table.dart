@@ -17,6 +17,7 @@ class SettingsTable {
 
   static Future<void> saveSettings(AppSettingsModel settings) async {
     final db = await LocalCacheManager.getDatabase();
+    if (db == null) return;
     await db.insert(tableName, {
       'id': 0,
       ...settings.toJsonDb(),
@@ -25,6 +26,7 @@ class SettingsTable {
 
   static Future<AppSettingsModel> getSettings() async {
     final db = await LocalCacheManager.getDatabase();
+    if (db == null) return AppSettingsModel();
     final maps = await db.query(tableName, where: 'id = 0');
     if (maps.isEmpty) return AppSettingsModel();
     return AppSettingsModel.fromJsonDb(maps.first);
@@ -32,6 +34,7 @@ class SettingsTable {
 
   static Future<void> deleteAllSettings() async {
     final db = await LocalCacheManager.getDatabase();
+    if (db == null) return;
     await db.delete(tableName);
   }
 }

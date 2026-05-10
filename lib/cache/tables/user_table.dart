@@ -20,39 +20,38 @@ class UserTable {
     ''');
   }
 
-  /// Save or Update user in local cache
   static Future<void> saveUser(UserModel user) async {
     final db = await LocalCacheManager.getDatabase();
+    if (db == null) return;
     await db.insert(
       tableName,
-      user.toJsonDb(), // Ensure your UserModel has a toJsonDb method
+      user.toJsonDb(),
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
 
-  /// Retrieve the current user from cache
   static Future<UserModel?> getUser(String uid) async {
     final db = await LocalCacheManager.getDatabase();
+    if (db == null) return null;
     final maps = await db.query(
       tableName,
       where: 'uid = ?',
       whereArgs: [uid],
       limit: 1,
     );
-
     if (maps.isEmpty) return null;
     return UserModel.fromJsonDb(maps.first);
   }
 
-  /// Delete user data (useful for Logout)
   static Future<void> deleteUser(String uid) async {
     final db = await LocalCacheManager.getDatabase();
+    if (db == null) return;
     await db.delete(tableName, where: 'uid = ?', whereArgs: [uid]);
   }
 
-  /// Clear entire table
   static Future<void> deleteAllUsers() async {
     final db = await LocalCacheManager.getDatabase();
+    if (db == null) return;
     await db.delete(tableName);
   }
 }
