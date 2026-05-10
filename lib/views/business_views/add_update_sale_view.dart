@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:sprint_14/components/category_selector.dart';
 import 'package:sprint_14/helpers/app_data.dart';
 import 'package:sprint_14/models/product_model.dart';
@@ -25,21 +26,25 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _qtyController = TextEditingController();
 
+  DateTime _selectedDate = DateTime.now(); // Default to today
+  bool _saveAndAddAnother = false; // For bulk entry
+
   double _measurementValue = 1.0;
   double _currentProfit = 0.0;
   bool _isEditMode = false;
-  bool _isInitialized = false; // Prevents re-initialization loops
+  bool _isInitialized = false;
 
   @override
   void initState() {
     super.initState();
     _isEditMode = widget.sale != null;
-    if (!_isEditMode) {
+    if (_isEditMode) {
+      _selectedDate = widget.sale!.dateTime;
+    } else {
       _qtyController.text = "1";
     }
   }
 
-  /// Reactive initialization: Populates fields once products are available
   void _initializeEditData(List<ProductModel> products) {
     if (_isInitialized || widget.sale == null) return;
 
@@ -50,7 +55,6 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
     );
 
     if (product != null) {
-      // Use addPostFrameCallback to avoid calling setState during build
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         setState(() {
@@ -91,6 +95,18 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
     });
   }
 
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null) {
+      setState(() => _selectedDate = picked);
+    }
+  }
+
   @override
   void dispose() {
     _priceController.dispose();
@@ -103,7 +119,6 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
     final theme = Theme.of(context);
     final productState = ref.watch(productProvider(widget.businessId));
 
-    // Reactive Listener: Auto-populates when data arrives
     productState.whenData((products) => _initializeEditData(products));
 
     return Scaffold(
@@ -122,6 +137,13 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     sliver: SliverList(
                       delegate: SliverChildListDelegate([
+                        const SizedBox(height: 24),
+
+                        // 1. DATE PICKER SECTION
+                        _buildSectionLabel("TRANSACTION DATE"),
+                        const SizedBox(height: 12),
+                        _buildDatePicker(theme),
+
                         const SizedBox(height: 24),
                         _buildSectionLabel("SELECT CATALOG CATEGORY"),
                         const SizedBox(height: 12),
@@ -151,6 +173,12 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
                         const SizedBox(height: 32),
                         if (_selectedProduct != null)
                           _buildProfitInsight(theme),
+
+                        // 2. BULK MODE TOGGLE
+                        if (!_isEditMode) ...[
+                          const SizedBox(height: 24),
+                          _buildBulkToggle(theme),
+                        ],
                         const SizedBox(height: 40),
                       ]),
                     ),
@@ -164,6 +192,60 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
       ),
     );
   }
+
+  Widget _buildDatePicker(ThemeData theme) {
+    return InkWell(
+      onTap: _pickDate,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHighest.withValues(
+            alpha: 0.3,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: theme.colorScheme.outline.withValues(alpha: 0.1),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.calendar_today_rounded,
+              size: 18,
+              color: theme.colorScheme.primary,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              DateFormat('EEEE, MMM d, yyyy').format(_selectedDate),
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const Spacer(),
+            const Icon(Icons.arrow_drop_down_rounded, color: Colors.grey),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBulkToggle(ThemeData theme) {
+    return SwitchListTile.adaptive(
+      value: _saveAndAddAnother,
+      onChanged: (val) => setState(() => _saveAndAddAnother = val),
+      title: const Text(
+        "Bulk Mode",
+        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+      ),
+      subtitle: const Text(
+        "Keep this screen open for multiple sales",
+        style: TextStyle(fontSize: 11),
+      ),
+      secondary: Icon(Icons.layers_outlined, color: theme.colorScheme.primary),
+      contentPadding: EdgeInsets.zero,
+    );
+  }
+
+  // --- UI Components (Same as provided but refactored to use theme correctly) ---
 
   Widget _buildHeader(ThemeData theme) {
     return SliverAppBar(
@@ -192,7 +274,6 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
               color: theme.colorScheme.error,
             ),
           ),
-        const SizedBox(width: 8),
       ],
     );
   }
@@ -374,17 +455,13 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
   }
 
   Widget _buildProfitInsight(ThemeData theme) {
-    if (_selectedProduct == null) return const SizedBox.shrink();
-
     final isHealthy = _currentProfit >= 0;
     final accentColor = isHealthy ? Colors.green.shade600 : Colors.red.shade600;
-
     final multiplier = double.tryParse(_qtyController.text) ?? 1.0;
     final bool isLinear =
         _selectedProduct!.unitType == "Meter" ||
         _selectedProduct!.unitType == "Gazz";
     final totalQty = isLinear ? (_measurementValue * multiplier) : multiplier;
-
     final totalCost = _selectedProduct!.retailPrice * totalQty;
     final suggestedMSRP = _selectedProduct!.msrpPrice * totalQty;
 
@@ -576,16 +653,36 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
       soldAtPrice: totalBilling,
       profit: _currentProfit,
       quantity: finalQuantity,
-      dateTime: _isEditMode ? widget.sale!.dateTime : DateTime.now(),
+      dateTime: _selectedDate, // Uses the picked date
       isSynced: false,
       isDeleted: false,
     );
 
     if (_isEditMode) {
       ref.read(saleProvider(widget.businessId).notifier).updateSale(sale);
+      Navigator.pop(context);
     } else {
       ref.read(saleProvider(widget.businessId).notifier).recordSale(sale);
+
+      if (_saveAndAddAnother) {
+        // RESET FORM FOR NEXT ENTRY
+        HapticFeedback.mediumImpact();
+        setState(() {
+          _selectedProduct = null;
+          _priceController.clear();
+          _qtyController.text = "1";
+          _measurementValue = 1.0;
+          _currentProfit = 0.0;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Sale Recorded! Form reset."),
+            duration: Duration(seconds: 1),
+          ),
+        );
+      } else {
+        Navigator.pop(context);
+      }
     }
-    Navigator.pop(context);
   }
 }
