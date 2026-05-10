@@ -282,9 +282,15 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
     ThemeData theme,
     List<ProductModel> allProducts,
   ) {
+    // 1. Filter by Category (Theya vs Inside) and Availability
     final filteredList = allProducts
-        .where((p) => p.isTheya == _isTheyaFilter)
+        .where((p) => p.isTheya == _isTheyaFilter && p.isAvailableForSale)
         .toList();
+
+    // 2. 🔥 SORT ALPHABETICALLY (A-Z)
+    filteredList.sort(
+      (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
+    );
 
     return Container(
       decoration: BoxDecoration(
@@ -292,13 +298,18 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
         borderRadius: BorderRadius.circular(20),
       ),
       child: DropdownButtonFormField<ProductModel>(
+        // Use the currently selected product as the value
         initialValue: _selectedProduct,
-        hint: Text("Select ${_isTheyaFilter ? 'Theya' : 'Inside'} Item..."),
+        hint: Text(
+          "Select ${_isTheyaFilter ? 'Theya' : 'Inside'} Item...",
+          style: const TextStyle(fontSize: 13),
+        ),
         decoration: const InputDecoration(
           prefixIcon: Icon(Icons.inventory_2_outlined),
           border: InputBorder.none,
           contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         ),
+        // Ensure items match the filtered and sorted list
         items: filteredList
             .map(
               (p) => DropdownMenuItem(

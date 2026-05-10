@@ -28,8 +28,8 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
   late TextEditingController _msrpController;
   late TextEditingController _stockController;
 
-  bool _isTheya = true;
-  String _classification = "Fixed"; // Options: "Fixed", "Open", "Matching"
+  bool _isTheya = false;
+  String _classification = "Fixed";
   String _unitType = "Piece";
 
   @override
@@ -55,17 +55,15 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
     if (widget.product != null) {
       _isTheya = widget.product!.isTheya;
       _unitType = widget.product!.unitType;
-
-      // MIGRATION LOGIC: Map old categories to new Stock Types
       final oldClass = widget.product!.classification;
       if (oldClass == "Matching" || oldClass == "Fancy") {
-        _classification = "Matching"; // Infinite Stock
+        _classification = "Matching";
       } else if (oldClass == "Open" ||
           _unitType == "Meter" ||
           _unitType == "Gazz") {
-        _classification = "Open"; // Length Tracked
+        _classification = "Open";
       } else {
-        _classification = "Fixed"; // Piece Tracked
+        _classification = "Fixed";
       }
     }
   }
@@ -81,7 +79,6 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
 
   void _handleSave() {
     if (_formKey.currentState!.validate()) {
-      // Logic: Matching items don't track stock (Infinite)
       double stockValue = (_classification == "Matching")
           ? 999.0
           : (double.tryParse(_stockController.text) ?? 0.0);
@@ -116,6 +113,8 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final allProducts =
+        ref.watch(productProvider(widget.businessId)).value ?? [];
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
@@ -155,16 +154,12 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
           children: [
             _buildPlacementSelector(theme),
             const SizedBox(height: 32),
-
-            // INVENTORY SECTION
             _SectionHeader(
               title: "INVENTORY LOGIC",
               icon: Icons.warehouse_outlined,
             ),
             const SizedBox(height: 16),
             _buildTypeSelectors(),
-
-            // Only show Stock field if the item is not "Infinite" (Matching)
             if (_classification != "Matching") ...[
               const SizedBox(height: 24),
               _buildPremiumTextField(
@@ -178,27 +173,20 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
               ),
             ],
             const SizedBox(height: 32),
-
-            // IDENTITY SECTION
             _SectionHeader(
               title: "IDENTITY",
               icon: Icons.label_important_outline,
             ),
             const SizedBox(height: 16),
-            _buildPremiumTextField(
-              controller: _titleController,
-              label: "Display Name",
-              hint: "e.g., Atal (All Colors) or Zara Suit",
-              icon: Icons.inventory_2_rounded,
-            ),
-            const SizedBox(height: 32),
 
-            // FINANCIAL SECTION
+            // 🔥 DISPLAY NAME WITH AUTOCOMPLETE (Duplicate Prevention UX)
+            _buildAutocompleteTitleField(theme, allProducts),
+
+            const SizedBox(height: 32),
             _SectionHeader(title: "FINANCIALS", icon: Icons.payments_outlined),
             const SizedBox(height: 16),
             _buildPriceInputs(),
             const SizedBox(height: 48),
-
             _buildSubmitButton(theme),
             const SizedBox(height: 40),
           ],
@@ -206,6 +194,132 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
       ),
     );
   }
+
+  // --- NEW: Autocomplete Title Field ---
+  Widget _buildAutocompleteTitleField(
+    ThemeData theme,
+    List<ProductModel> products,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Display Name",
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: Colors.grey,
+          ),
+        ),
+        const SizedBox(height: 8),
+        RawAutocomplete<String>(
+          textEditingController: _titleController,
+          focusNode: FocusNode(),
+          optionsBuilder: (TextEditingValue textEditingValue) {
+            if (textEditingValue.text.isEmpty) {
+              return const Iterable<String>.empty();
+            }
+            return products
+                .where(
+                  (p) => p.title.toLowerCase().contains(
+                    textEditingValue.text.toLowerCase(),
+                  ),
+                )
+                .map((p) => p.title);
+          },
+          fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+            return TextFormField(
+              controller: controller,
+              focusNode: focusNode,
+              decoration: _inputDecoration(
+                theme,
+                "e.g., Midnight Silk 3-PC",
+                Icons.inventory_2_rounded,
+              ),
+              validator: (v) => v == null || v.isEmpty ? "Required" : null,
+            );
+          },
+          optionsViewBuilder: (context, onSelected, options) {
+            return Align(
+              alignment: Alignment.topLeft,
+              child: Material(
+                elevation: 4,
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  width: MediaQuery.of(context).size.width - 48,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surface,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: ListView.builder(
+                    padding: EdgeInsets.zero,
+                    shrinkWrap: true,
+                    itemCount: options.length,
+                    itemBuilder: (BuildContext context, int index) {
+                      final String option = options.elementAt(index);
+                      return GestureDetector(
+                        onTap: () => onSelected(option),
+                        child: Padding(
+                          padding: const EdgeInsets.only(
+                            bottom: 4,
+                            left: 8,
+                            top: 4,
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.history,
+                                size: 18,
+                                color: Colors.grey,
+                              ),
+
+                              const SizedBox(width: 12),
+
+                              Text(
+                                option,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.redAccent,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  // Helper for Input Decoration
+  InputDecoration _inputDecoration(
+    ThemeData theme,
+    String hint,
+    IconData icon,
+  ) {
+    return InputDecoration(
+      hintText: hint,
+      prefixIcon: Icon(icon, size: 20),
+      filled: true,
+      fillColor: Colors.grey.withValues(alpha: 0.05),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: theme.colorScheme.primary, width: 2),
+      ),
+    );
+  }
+
+  // --- UI Building Blocks ---
 
   Widget _buildPlacementSelector(ThemeData theme) {
     return Container(
@@ -217,18 +331,18 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
       child: Row(
         children: [
           _PlacementOption(
-            title: "THEYA",
-            isActive: _isTheya,
-            activeColor: Colors.amber.shade700,
-            icon: Icons.storefront_rounded,
-            onTap: () => setState(() => _isTheya = true),
-          ),
-          _PlacementOption(
             title: "INSIDE",
             isActive: !_isTheya,
             activeColor: theme.colorScheme.primary,
             icon: Icons.chair_rounded,
             onTap: () => setState(() => _isTheya = false),
+          ),
+          _PlacementOption(
+            title: "THEYA",
+            isActive: _isTheya,
+            activeColor: Colors.amber.shade700,
+            icon: Icons.storefront_rounded,
+            onTap: () => setState(() => _isTheya = true),
           ),
         ],
       ),
@@ -382,10 +496,7 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
               ),
             ),
           ),
-          validator: (v) {
-            if (v == null || v.isEmpty) return "Required";
-            return null;
-          },
+          validator: (v) => v == null || v.isEmpty ? "Required" : null,
         ),
       ],
     );
@@ -420,6 +531,8 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
     );
   }
 }
+
+// --- Component Classes ---
 
 class _PlacementOption extends StatelessWidget {
   final String title;
