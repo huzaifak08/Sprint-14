@@ -73,3 +73,5 @@ class MyApp extends ConsumerWidget {
 }
 
 // dart run build_runner build --delete-conflicting-outputs
+
+// fvm flutter build web --base-href "/sprint-14/"
