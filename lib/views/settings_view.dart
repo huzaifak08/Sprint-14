@@ -15,7 +15,7 @@ import 'package:sprint_14/providers/product_provider/product_provider.dart';
 import 'package:sprint_14/providers/sale_provider/sale_provider.dart';
 import 'package:sprint_14/providers/settings_provider/settings_provider.dart';
 import 'package:sprint_14/providers/user_provider/user_provider.dart';
-import 'package:sprint_14/views/auth/sign_in_view.dart';
+import 'package:sprint_14/views/auth/sign_in_view/sign_in_view.dart';
 import 'package:sprint_14/views/profile_view.dart';
 import 'dart:developer' as dev;
 
