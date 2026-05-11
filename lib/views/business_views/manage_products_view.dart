@@ -63,9 +63,13 @@ class _ManageProductsViewState extends ConsumerState<ManageProductsView> {
                 SliverFillRemaining(child: Center(child: Text("Error: $err"))),
             data: (allProducts) {
               // 🔥 Filter the data right here in the UI
-              final filteredProducts = allProducts
-                  .where((p) => p.isTheya == isTheyaView)
-                  .toList();
+              final filteredProducts =
+                  allProducts.where((p) => p.isTheya == isTheyaView).toList()
+                    ..sort(
+                      (a, b) => a.title.toLowerCase().compareTo(
+                        b.title.toLowerCase(),
+                      ),
+                    );
 
               if (filteredProducts.isEmpty) {
                 return SliverFillRemaining(child: _buildEmptyCatalog(theme));

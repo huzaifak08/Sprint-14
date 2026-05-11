@@ -3,8 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class SaleModel {
   final String id;
   final String businessId;
-  final String productId;
-  final String productTitle;
+  final List<String> productIds;
+  final List<String> productTitles;
   final double soldAtPrice;
   final double profit;
   final double quantity;
@@ -17,8 +17,8 @@ class SaleModel {
   SaleModel({
     required this.id,
     required this.businessId,
-    required this.productId,
-    required this.productTitle,
+    required this.productIds,
+    required this.productTitles,
     required this.soldAtPrice,
     required this.profit,
     required this.quantity,
@@ -28,12 +28,11 @@ class SaleModel {
     required this.isDeleted,
   });
 
-  // ===================== copyWith =====================
   SaleModel copyWith({
     String? id,
     String? businessId,
-    String? productId,
-    String? productTitle,
+    List<String>? productIds,
+    List<String>? productTitles,
     double? soldAtPrice,
     double? profit,
     double? quantity,
@@ -45,8 +44,8 @@ class SaleModel {
     return SaleModel(
       id: id ?? this.id,
       businessId: businessId ?? this.businessId,
-      productId: productId ?? this.productId,
-      productTitle: productTitle ?? this.productTitle,
+      productIds: productIds ?? this.productIds,
+      productTitles: productTitles ?? this.productTitles,
       soldAtPrice: soldAtPrice ?? this.soldAtPrice,
       profit: profit ?? this.profit,
       quantity: quantity ?? this.quantity,
@@ -62,8 +61,8 @@ class SaleModel {
     return {
       'id': id,
       'businessId': businessId,
-      'productId': productId,
-      'productTitle': productTitle,
+      'productIds': productIds,
+      'productTitles': productTitles,
       'soldAtPrice': soldAtPrice,
       'profit': profit,
       'quantity': quantity,
@@ -75,8 +74,13 @@ class SaleModel {
     return SaleModel(
       id: map['id'] ?? '',
       businessId: map['businessId'] ?? '',
-      productId: map['productId'] ?? '',
-      productTitle: map['productTitle'] ?? '',
+      // Defensive check for Firestore (handles legacy single string fields)
+      productIds: map['productIds'] is List
+          ? List<String>.from(map['productIds'])
+          : [map['productId']?.toString() ?? ''],
+      productTitles: map['productTitles'] is List
+          ? List<String>.from(map['productTitles'])
+          : [map['productTitle']?.toString() ?? ''],
       soldAtPrice: (map['soldAtPrice'] as num?)?.toDouble() ?? 0.0,
       profit: (map['profit'] as num?)?.toDouble() ?? 0.0,
       quantity: (map['quantity'] as num?)?.toDouble() ?? 1.0,
@@ -92,8 +96,8 @@ class SaleModel {
     return {
       'id': id,
       'businessId': businessId,
-      'productId': productId,
-      'productTitle': productTitle,
+      'productIds': productIds.join(','), // Store as CSV
+      'productTitles': productTitles.join(','), // Store as CSV
       'soldAtPrice': soldAtPrice,
       'profit': profit,
       'quantity': quantity,
@@ -108,8 +112,11 @@ class SaleModel {
     return SaleModel(
       id: json['id'],
       businessId: json['businessId'] ?? '',
-      productId: json['productId'] ?? '',
-      productTitle: json['productTitle'] ?? '',
+      // Defensive split: if it's already a list or empty, handle it
+      productIds: _parseDbList(json['productIds'] ?? json['productId']),
+      productTitles: _parseDbList(
+        json['productTitles'] ?? json['productTitle'],
+      ),
       soldAtPrice: (json['soldAtPrice'] as num?)?.toDouble() ?? 0.0,
       profit: (json['profit'] as num?)?.toDouble() ?? 0.0,
       quantity: (json['quantity'] as num?)?.toDouble() ?? 1.0,
@@ -120,5 +127,12 @@ class SaleModel {
           : null,
       isDeleted: (json['isDeleted'] ?? 0) == 1,
     );
+  }
+
+  static List<String> _parseDbList(dynamic value) {
+    if (value == null) return [];
+    if (value is List) return List<String>.from(value);
+    final str = value.toString();
+    return str.isEmpty ? [] : str.split(',');
   }
 }

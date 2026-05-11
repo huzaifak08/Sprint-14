@@ -147,4 +147,15 @@ class ProductModel {
     if (isInfinite) return true; // Always show Atal/Matching
     return currentStock > 0; // Only hide fixed articles (suits) when empty
   }
+
+  // Inside ProductModel class
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ProductModel &&
+          runtimeType == other.runtimeType &&
+          id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
 }

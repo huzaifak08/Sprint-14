@@ -27,7 +27,7 @@ class LocalCacheManager {
 
     return openDatabase(
       path,
-      version: 4, // Increment version number when schema changes
+      version: 5, // Increment version number when schema changes
       onCreate: (db, version) async {
         // await ProjectTable.createTable(db);
         await LedgerTable.createTable(db);
@@ -56,6 +56,27 @@ class LocalCacheManager {
             );
           } catch (e) {
             dev.log("Migration Error: $e", name: "init Cache");
+          }
+        }
+
+        if (oldVersion < 5) {
+          try {
+            // Migrating Sales Table for Multi-Product support
+            // We rename the old columns and add the new plural ones
+            await db.execute(
+              "ALTER TABLE sales RENAME COLUMN productId TO productIds",
+            );
+            await db.execute(
+              "ALTER TABLE sales RENAME COLUMN productTitle TO productTitles",
+            );
+            dev.log(
+              "Database Upgraded to v5: Sales table migrated to multi-product schema",
+            );
+          } catch (e) {
+            dev.log("Migration Error v5: $e. Recreating table...");
+            // Fallback: Recreate table if rename fails
+            await db.execute("DROP TABLE IF EXISTS sales");
+            await SaleTable.createTable(db);
           }
         }
       },

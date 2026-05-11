@@ -18,7 +18,7 @@ class SaleService {
   /// Record or Update a sale (Set with merge covers both)
   Future<bool> recordSale({required SaleModel sale}) async {
     try {
-      dev.log("Syncing Sale: ${sale.productTitle}", name: "SaleService");
+      dev.log("Syncing Sale: ${sale.productTitles}", name: "SaleService");
       await _saleRef(
         sale.businessId,
       ).doc(sale.id).set(sale.toMap(), SetOptions(merge: true));

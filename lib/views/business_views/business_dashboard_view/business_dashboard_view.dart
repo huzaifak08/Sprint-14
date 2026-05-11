@@ -1,7 +1,6 @@
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:sprint_14/models/product_model.dart';
 import 'package:sprint_14/providers/business_provider/business_provider.dart';
 import 'package:sprint_14/providers/product_provider/product_provider.dart';
 import 'package:sprint_14/providers/sale_provider/sale_provider.dart';
@@ -27,17 +26,15 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView>
     with WidgetsBindingObserver {
   @override
   void initState() {
+    super.initState();
     WidgetsBinding.instance.addObserver(this);
     _initLogic();
-    super.initState();
   }
 
   void _initLogic() {
-    // ref.watch(appDataProvider).value;
-
     Connectivity().onConnectivityChanged.listen((result) {
-      if (result.contains(ConnectivityResult.wifi) ||
-          result.contains(ConnectivityResult.mobile)) {
+      // Check if any connection exists to trigger sync
+      if (result.any((r) => r != ConnectivityResult.none)) {
         ref.read(businessProvider.notifier).syncPending();
         ref
             .read(productProvider(widget.businessId).notifier)
@@ -53,14 +50,12 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    // Watching providers
     final saleState = ref.watch(saleProvider(widget.businessId));
     final productState = ref.watch(productProvider(widget.businessId));
     final uiState = ref.watch(dashboardUiProvider);
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      // Fixed navigation trigger for recording new sales
       floatingActionButton: _buildFab(context, theme),
       body: saleState.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -68,24 +63,29 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView>
         data: (allSales) {
           final allProducts = productState.value ?? [];
 
-          // 1. DYNAMIC FILTERING (Search title, category, or type)
+          // 🔥 FIXED: Multi-product dynamic filtering
           final filteredSales = allSales.where((sale) {
             final dateMatch = _checkDateMatch(sale.dateTime, uiState);
             if (!dateMatch) return false;
 
             if (uiState.searchQuery.isNotEmpty) {
               final q = uiState.searchQuery.toLowerCase();
-              final product = allProducts.cast<ProductModel?>().firstWhere(
-                (p) => p?.id == sale.productId,
-                orElse: () => null,
+
+              // 1. Check if any title in the basket matches search
+              final titleMatch = sale.productTitles.any(
+                (title) => title.toLowerCase().contains(q),
               );
 
-              return sale.productTitle.toLowerCase().contains(q) ||
-                  (product?.classification.toLowerCase().contains(q) ??
-                      false) ||
-                  ((product?.isTheya ?? false) ? "theya" : "inside").contains(
-                    q,
+              // 2. Check if any associated product category/type matches
+              final metaMatch = allProducts
+                  .where((p) => sale.productIds.contains(p.id))
+                  .any(
+                    (p) =>
+                        p.classification.toLowerCase().contains(q) ||
+                        (p.isTheya ? "theya" : "inside").contains(q),
                   );
+
+              return titleMatch || metaMatch;
             }
             return true;
           }).toList();
@@ -95,12 +95,7 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView>
             slivers: [
               _buildAppBar(context, ref, uiState, widget.businessId, theme),
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(
-                  16,
-                  12,
-                  16,
-                  120,
-                ), // Bottom padding for FAB clearance
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
                     SummaryCard(sales: filteredSales),
@@ -114,7 +109,6 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView>
                       count: filteredSales.length,
                     ),
                     const SizedBox(height: 12),
-                    // Passed businessId here so table rows can navigate to Update
                     SalesDataTable(
                       sales: filteredSales,
                       businessId: widget.businessId,
@@ -129,9 +123,9 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView>
     );
   }
 
-  /// Navigation trigger for Adding a Sale
   Widget _buildFab(BuildContext context, ThemeData theme) {
     return FloatingActionButton.extended(
+      heroTag: null, // 🔥 FIX: Prevents lag and multiple hero tag exceptions
       onPressed: () => Navigator.push(
         context,
         MaterialPageRoute(
@@ -155,9 +149,7 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView>
 
   bool _checkDateMatch(DateTime saleDate, DashboardUiState ui) {
     if (ui.activeFilter == DashboardFilterType.daily) {
-      return saleDate.day == ui.selectedDate.day &&
-          saleDate.month == ui.selectedDate.month &&
-          saleDate.year == ui.selectedDate.year;
+      return DateUtils.isSameDay(saleDate, ui.selectedDate);
     } else if (ui.activeFilter == DashboardFilterType.monthly) {
       return saleDate.month == ui.selectedDate.month &&
           saleDate.year == ui.selectedDate.year;
@@ -189,10 +181,10 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView>
           autofocus: true,
           style: TextStyle(color: theme.colorScheme.onSurface),
           decoration: InputDecoration(
-            hintText: "Search Title, Category...",
+            hintText: "Search in basket titles...",
             border: InputBorder.none,
             hintStyle: TextStyle(
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+              color: theme.colorScheme.onSurface.withOpacity(0.5),
             ),
           ),
           onChanged: notifier.updateSearch,
@@ -204,24 +196,19 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView>
       backgroundColor: theme.scaffoldBackgroundColor,
       surfaceTintColor: Colors.transparent,
       title: Text(
-        businessState.when(
+        businessState.maybeWhen(
           data: (business) => business.name,
-          error: (error, stackTrace) => "ERROR",
-          loading: () => "BUSINESS",
+          orElse: () => "BUSINESS",
         ),
-        style: TextStyle(
+        style: const TextStyle(
           fontWeight: FontWeight.w900,
           fontSize: 14,
           letterSpacing: 2,
-          color: theme.colorScheme.onSurface,
         ),
       ),
       actions: [
         IconButton(
-          icon: Icon(
-            Icons.layers_rounded,
-            color: ui.isSelectionMode ? theme.colorScheme.primary : null,
-          ),
+          icon: const Icon(Icons.layers_outlined),
           onPressed: () {
             Navigator.push(
               context,
@@ -232,7 +219,6 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView>
             );
           },
         ),
-
         IconButton(
           icon: Icon(
             ui.isSelectionMode

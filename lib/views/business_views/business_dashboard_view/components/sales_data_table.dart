@@ -38,7 +38,7 @@ class SalesDataTable extends ConsumerWidget {
           child: DataTable(
             showCheckboxColumn: ui.isSelectionMode,
             headingRowHeight: 52,
-            dataRowMaxHeight: 64, // Increased slightly for better layout
+            dataRowMaxHeight: 70, // Increased for multi-line titles
             columnSpacing: 32,
             horizontalMargin: 20,
             headingTextStyle: TextStyle(
@@ -50,6 +50,12 @@ class SalesDataTable extends ConsumerWidget {
             rows: sales.map((sale) {
               final isSelected = ui.selectedIds.contains(sale.id);
               final bool isProfitable = sale.profit > 0;
+
+              // 🔥 Handle Multi-Product Display Logic
+              final String displayTitle = sale.productTitles.isNotEmpty
+                  ? sale.productTitles.first.toUpperCase()
+                  : "NO TITLE";
+              final int extraCount = sale.productTitles.length - 1;
 
               return DataRow(
                 selected: isSelected,
@@ -79,16 +85,45 @@ class SalesDataTable extends ConsumerWidget {
                           mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              sale.productTitle.toUpperCase(),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w900,
-                                fontSize: 13,
-                                letterSpacing: 0.5,
-                              ),
+                            Row(
+                              children: [
+                                Text(
+                                  displayTitle,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 13,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                                if (extraCount > 0) ...[
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: theme.colorScheme.primaryContainer,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      "+$extraCount",
+                                      style: TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                        color: theme
+                                            .colorScheme
+                                            .onPrimaryContainer,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
                             Text(
-                              DateFormat('hh:mm a').format(sale.dateTime),
+                              DateFormat(
+                                'hh:mm a • dd MMM',
+                              ).format(sale.dateTime),
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
@@ -102,7 +137,6 @@ class SalesDataTable extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  // Bill Amount
                   DataCell(
                     Text(
                       sale.soldAtPrice.toStringAsFixed(0),
@@ -112,7 +146,6 @@ class SalesDataTable extends ConsumerWidget {
                       ),
                     ),
                   ),
-                  // Profit Badge
                   DataCell(
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -126,7 +159,7 @@ class SalesDataTable extends ConsumerWidget {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        sale.profit.toStringAsFixed(0),
+                        "${isProfitable ? '+' : ''}${sale.profit.toStringAsFixed(0)}",
                         style: TextStyle(
                           color: isProfitable
                               ? theme.colorScheme.primary
@@ -137,7 +170,6 @@ class SalesDataTable extends ConsumerWidget {
                       ),
                     ),
                   ),
-                  // Quantity
                   DataCell(
                     Text(
                       sale.quantity.toStringAsFixed(1),
