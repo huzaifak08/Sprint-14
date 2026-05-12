@@ -16,6 +16,7 @@ class SaleTable {
         soldAtPrice REAL NOT NULL,
         profit REAL NOT NULL,
         quantity REAL NOT NULL,
+        measurement REAL NOT NULL,
         dateTime TEXT NOT NULL,
         isSynced INTEGER NOT NULL,
         lastSyncAttempt TEXT,

@@ -7,7 +7,8 @@ class SaleModel {
   final List<String> productTitles;
   final double soldAtPrice;
   final double profit;
-  final double quantity;
+  final double quantity; // Represents pieces/count
+  final double measurement; // 🔥 NEW: Represents length (Meter/Gazz)
   final DateTime dateTime;
 
   final bool isSynced;
@@ -22,6 +23,7 @@ class SaleModel {
     required this.soldAtPrice,
     required this.profit,
     required this.quantity,
+    required this.measurement, // 🔥
     required this.dateTime,
     required this.isSynced,
     this.lastSyncAttempt,
@@ -36,6 +38,7 @@ class SaleModel {
     double? soldAtPrice,
     double? profit,
     double? quantity,
+    double? measurement, // 🔥
     DateTime? dateTime,
     bool? isSynced,
     DateTime? lastSyncAttempt,
@@ -49,6 +52,7 @@ class SaleModel {
       soldAtPrice: soldAtPrice ?? this.soldAtPrice,
       profit: profit ?? this.profit,
       quantity: quantity ?? this.quantity,
+      measurement: measurement ?? this.measurement, // 🔥
       dateTime: dateTime ?? this.dateTime,
       isSynced: isSynced ?? this.isSynced,
       lastSyncAttempt: lastSyncAttempt ?? this.lastSyncAttempt,
@@ -66,6 +70,7 @@ class SaleModel {
       'soldAtPrice': soldAtPrice,
       'profit': profit,
       'quantity': quantity,
+      'measurement': measurement, // 🔥
       'dateTime': Timestamp.fromDate(dateTime),
     };
   }
@@ -74,7 +79,6 @@ class SaleModel {
     return SaleModel(
       id: map['id'] ?? '',
       businessId: map['businessId'] ?? '',
-      // Defensive check for Firestore (handles legacy single string fields)
       productIds: map['productIds'] is List
           ? List<String>.from(map['productIds'])
           : [map['productId']?.toString() ?? ''],
@@ -84,6 +88,8 @@ class SaleModel {
       soldAtPrice: (map['soldAtPrice'] as num?)?.toDouble() ?? 0.0,
       profit: (map['profit'] as num?)?.toDouble() ?? 0.0,
       quantity: (map['quantity'] as num?)?.toDouble() ?? 1.0,
+      measurement:
+          (map['measurement'] as num?)?.toDouble() ?? 1.0, // 🔥 Fallback to 1.0
       dateTime: (map['dateTime'] as Timestamp).toDate(),
       isSynced: true,
       lastSyncAttempt: null,
@@ -96,11 +102,12 @@ class SaleModel {
     return {
       'id': id,
       'businessId': businessId,
-      'productIds': productIds.join(','), // Store as CSV
-      'productTitles': productTitles.join(','), // Store as CSV
+      'productIds': productIds.join(','),
+      'productTitles': productTitles.join(','),
       'soldAtPrice': soldAtPrice,
       'profit': profit,
       'quantity': quantity,
+      'measurement': measurement,
       'dateTime': dateTime.toIso8601String(),
       'isSynced': isSynced ? 1 : 0,
       'lastSyncAttempt': lastSyncAttempt?.toIso8601String(),
@@ -112,7 +119,6 @@ class SaleModel {
     return SaleModel(
       id: json['id'],
       businessId: json['businessId'] ?? '',
-      // Defensive split: if it's already a list or empty, handle it
       productIds: _parseDbList(json['productIds'] ?? json['productId']),
       productTitles: _parseDbList(
         json['productTitles'] ?? json['productTitle'],
@@ -120,6 +126,9 @@ class SaleModel {
       soldAtPrice: (json['soldAtPrice'] as num?)?.toDouble() ?? 0.0,
       profit: (json['profit'] as num?)?.toDouble() ?? 0.0,
       quantity: (json['quantity'] as num?)?.toDouble() ?? 1.0,
+      measurement:
+          (json['measurement'] as num?)?.toDouble() ??
+          1.0, // 🔥 Fallback for old data
       dateTime: DateTime.parse(json['dateTime']),
       isSynced: (json['isSynced'] ?? 0) == 1,
       lastSyncAttempt: json['lastSyncAttempt'] != null

@@ -27,7 +27,7 @@ class LocalCacheManager {
 
     return openDatabase(
       path,
-      version: 5, // Increment version number when schema changes
+      version: 6, // Increment version number when schema changes
       onCreate: (db, version) async {
         // await ProjectTable.createTable(db);
         await LedgerTable.createTable(db);
@@ -77,6 +77,19 @@ class LocalCacheManager {
             // Fallback: Recreate table if rename fails
             await db.execute("DROP TABLE IF EXISTS sales");
             await SaleTable.createTable(db);
+          }
+
+          if (oldVersion < 6) {
+            try {
+              await db.execute(
+                "ALTER TABLE sales ADD COLUMN measurement REAL NOT NULL DEFAULT 1.0",
+              );
+              dev.log(
+                "Database Upgraded to v6: Added measurement column to sales table",
+              );
+            } catch (e) {
+              dev.log("Migration Error v6: $e");
+            }
           }
         }
       },

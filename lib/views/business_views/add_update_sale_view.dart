@@ -22,35 +22,29 @@ class AddUpdateSaleView extends ConsumerStatefulWidget {
 class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
   bool _isTheyaFilter = false;
 
-  final List<ProductModel> _selectedProducts = [];
+  final List<_SaleBasketItem> _basketItems = [];
 
-  final TextEditingController _priceController = TextEditingController();
-
-  final TextEditingController _qtyController = TextEditingController();
+  final TextEditingController _billingController = TextEditingController();
 
   DateTime _selectedDate = DateTime.now();
 
   bool _saveAndAddAnother = false;
 
-  double _measurementValue = 1.0;
+  bool _isEditMode = false;
+
+  bool _isInitialized = false;
 
   double _totalMSRP = 0.0;
 
   double _totalCost = 0.0;
 
-  double _currentProfit = 0.0;
-
-  bool _isEditMode = false;
-
-  bool _isInitialized = false;
+  double _profit = 0.0;
 
   @override
   void initState() {
     super.initState();
 
     _isEditMode = widget.sale != null;
-
-    _qtyController.text = "1";
 
     if (_isEditMode) {
       _selectedDate = widget.sale!.dateTime;
@@ -59,81 +53,135 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
 
   @override
   void dispose() {
-    _priceController.dispose();
-    _qtyController.dispose();
+    _billingController.dispose();
+
+    for (final item in _basketItems) {
+      item.dispose();
+    }
+
     super.dispose();
   }
 
   void _initializeEditData(List<ProductModel> products) {
     if (_isInitialized || widget.sale == null) return;
 
-    final matching = products
-        .where((p) => widget.sale!.productIds.contains(p.id))
+    final sale = widget.sale!;
+
+    final matchedProducts = products
+        .where((p) => sale.productIds.contains(p.id))
         .toList();
 
-    if (matching.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
 
-        setState(() {
-          _selectedProducts.clear();
-          _selectedProducts.addAll(matching);
+      setState(() {
+        _basketItems.clear();
 
-          _priceController.text = widget.sale!.soldAtPrice.toStringAsFixed(0);
+        final bool isMultiProduct = matchedProducts.length > 1;
 
-          _isInitialized = true;
+        for (final product in matchedProducts) {
+          final bool isLinear =
+              product.unitType == "Meter" || product.unitType == "Gazz";
 
-          _updateProfit();
-        });
+          _basketItems.add(
+            _SaleBasketItem(
+              product: product,
+
+              quantity: isMultiProduct ? 1 : sale.quantity,
+
+              measurement: isLinear ? sale.measurement : 1,
+            ),
+          );
+        }
+
+        _billingController.text = sale.soldAtPrice.toStringAsFixed(0);
+
+        _isInitialized = true;
+
+        _recalculate();
       });
-    }
+    });
   }
 
-  void _updateProfit() {
-    if (_selectedProducts.isEmpty) {
-      setState(() {
-        _totalMSRP = 0;
-        _totalCost = 0;
-        _currentProfit = 0;
-      });
+  void _recalculate() {
+    double collectiveMsrp = 0;
 
-      return;
+    double collectiveCost = 0;
+
+    for (final item in _basketItems) {
+      final qty = double.tryParse(item.qtyController.text) ?? 1;
+
+      final measurement = double.tryParse(item.measurementController.text) ?? 1;
+
+      final bool isLinear =
+          item.product.unitType == "Meter" || item.product.unitType == "Gazz";
+
+      final effectiveQty = isLinear ? qty * measurement : qty;
+
+      collectiveMsrp += item.product.msrpPrice * effectiveQty;
+
+      collectiveCost += item.product.retailPrice * effectiveQty;
     }
 
-    final totalBilling = double.tryParse(_priceController.text) ?? 0.0;
-
-    final multiplier = double.tryParse(_qtyController.text) ?? 1.0;
-
-    double collectiveMSRP = 0.0;
-
-    double collectiveCost = 0.0;
-
-    for (final p in _selectedProducts) {
-      final bool isLinear = p.unitType == "Meter" || p.unitType == "Gazz";
-
-      final itemQty = isLinear ? (_measurementValue * multiplier) : multiplier;
-
-      collectiveMSRP += (p.msrpPrice * itemQty);
-
-      collectiveCost += (p.retailPrice * itemQty);
-    }
+    final billing = double.tryParse(_billingController.text) ?? 0;
 
     setState(() {
-      _totalMSRP = collectiveMSRP;
+      _totalMSRP = collectiveMsrp;
       _totalCost = collectiveCost;
-      _currentProfit = totalBilling - collectiveCost;
+      _profit = billing - collectiveCost;
+    });
+  }
+
+  void _resetForm() {
+    for (final item in _basketItems) {
+      item.dispose();
+    }
+
+    final preservedDate = _selectedDate;
+
+    setState(() {
+      _basketItems.clear();
+
+      _billingController.clear();
+
+      /// 🔥 Preserve selected date in bulk mode
+      _selectedDate = preservedDate;
+
+      _totalMSRP = 0;
+      _totalCost = 0;
+      _profit = 0;
     });
   }
 
   void _submit() {
+    if (_basketItems.isEmpty) return;
+
+    final totalQuantity = _basketItems.fold<double>(0, (sum, item) {
+      final qty = double.tryParse(item.qtyController.text) ?? 1;
+
+      return sum + qty;
+    });
+
+    final firstLinearItem = _basketItems.cast<_SaleBasketItem?>().firstWhere(
+      (e) =>
+          e != null &&
+          (e.product.unitType == "Meter" || e.product.unitType == "Gazz"),
+      orElse: () => null,
+    );
+
+    final measurement = firstLinearItem == null
+        ? 1.0
+        : (double.tryParse(firstLinearItem.measurementController.text) ?? 1.0);
+
     final sale = SaleModel(
       id: _isEditMode ? widget.sale!.id : AppData.shared.uuid.v4(),
       businessId: widget.businessId,
-      productIds: _selectedProducts.map((p) => p.id).toList(),
-      productTitles: _selectedProducts.map((p) => p.title).toList(),
-      soldAtPrice: double.tryParse(_priceController.text) ?? 0.0,
-      profit: _currentProfit,
-      quantity: double.tryParse(_qtyController.text) ?? 1.0,
+      productIds: _basketItems.map((e) => e.product.id).toList(),
+      productTitles: _basketItems.map((e) => e.product.title).toList(),
+      soldAtPrice: double.tryParse(_billingController.text) ?? 0,
+      profit: _profit,
+      quantity: totalQuantity,
+      measurement: measurement,
       dateTime: _selectedDate,
       isSynced: false,
       isDeleted: false,
@@ -143,6 +191,16 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
       ref.read(saleProvider(widget.businessId).notifier).updateSale(sale);
     } else {
       ref.read(saleProvider(widget.businessId).notifier).recordSale(sale);
+    }
+
+    if (_saveAndAddAnother && !_isEditMode) {
+      _resetForm();
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Sale Recorded")));
+
+      return;
     }
 
     Navigator.pop(context);
@@ -192,48 +250,43 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
 
                     const SizedBox(height: 12),
 
-                    /// 🔥 FIXED DROPDOWN
                     _ProductDropdown(
                       key: ValueKey(_isTheyaFilter),
                       products: filteredProducts,
-                      selectedProducts: _selectedProducts,
+                      selectedProducts: _basketItems
+                          .map((e) => e.product)
+                          .toList(),
                       onSelected: (product) {
+                        final exists = _basketItems.any(
+                          (e) => e.product.id == product.id,
+                        );
+
+                        if (exists) return;
+
                         setState(() {
-                          final exists = _selectedProducts.any(
-                            (p) => p.id == product.id,
-                          );
+                          _basketItems.add(_SaleBasketItem(product: product));
 
-                          if (!exists) {
-                            _selectedProducts.add(product);
-
-                            if (_selectedProducts.length == 1) {
-                              _priceController.text = product.msrpPrice
-                                  .toStringAsFixed(0);
-                            }
-
-                            _updateProfit();
+                          if (_basketItems.length == 1) {
+                            _billingController.text = product.msrpPrice
+                                .toStringAsFixed(0);
                           }
+
+                          _recalculate();
                         });
                       },
                     ),
 
                     _buildSectionLabel("BASKET"),
 
-                    _buildBasketList(theme),
+                    _buildBasket(theme),
 
-                    if (_selectedProducts.any(
-                      (p) => p.unitType == "Meter" || p.unitType == "Gazz",
-                    ))
-                      _buildMeasurementSection(theme),
+                    _buildSectionLabel("COLLECTIVE BILLING"),
 
-                    _buildSectionLabel("TRANSACTION DETAILS"),
+                    _buildBillingField(theme),
 
-                    _buildInputGrid(theme),
+                    const SizedBox(height: 28),
 
-                    const SizedBox(height: 32),
-
-                    if (_selectedProducts.isNotEmpty)
-                      _buildProfitInsight(theme),
+                    if (_basketItems.isNotEmpty) _buildProfitCard(theme),
 
                     if (!_isEditMode) _buildBulkToggle(theme),
 
@@ -242,7 +295,7 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
                 ),
               ),
 
-              _buildConfirmButton(theme),
+              _buildSubmitButton(theme),
             ],
           );
         },
@@ -250,119 +303,124 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
     );
   }
 
-  AppBar _buildHeader(ThemeData theme) => AppBar(
-    title: Text(
-      _isEditMode ? "UPDATE SALE" : "RECORD SALE",
-      style: const TextStyle(
-        fontWeight: FontWeight.w900,
-        fontSize: 14,
-        letterSpacing: 2,
-      ),
-    ),
-    centerTitle: true,
-    elevation: 0,
-    backgroundColor: theme.colorScheme.surface,
-    actions: [
-      if (_isEditMode) ...{
-        IconButton(
-          icon: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.red.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.delete_outline,
-              color: Colors.red,
-              size: 20,
-            ),
-          ),
-          onPressed: () => _confirmDelete(context),
+  AppBar _buildHeader(ThemeData theme) {
+    return AppBar(
+      title: Text(
+        _isEditMode ? "UPDATE SALE" : "RECORD SALE",
+        style: const TextStyle(
+          fontWeight: FontWeight.w900,
+          fontSize: 14,
+          letterSpacing: 2,
         ),
-      },
-    ],
-  );
+      ),
+      centerTitle: true,
+      elevation: 0,
+      backgroundColor: theme.colorScheme.surface,
+      actions: [
+        if (_isEditMode)
+          IconButton(
+            icon: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.red.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.delete_outline,
+                color: Colors.red,
+                size: 20,
+              ),
+            ),
+            onPressed: () => _confirmDelete(context),
+          ),
+      ],
+    );
+  }
 
   void _confirmDelete(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text("Remove Sale?"),
-        content: const Text(
-          "This Sale will permanently be remove from your device as well as our Database.",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("CANCEL"),
+      builder: (_) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
           ),
-          TextButton(
-            onPressed: () {
-              if (widget.sale != null) {
-                ref
-                    .read(saleProvider(widget.businessId).notifier)
-                    .deleteSale(
-                      widget.sale?.id ?? 'NO SALE ID',
-                      widget.businessId,
-                    );
-              }
+          title: const Text("Remove Sale?"),
+          content: const Text(
+            "This sale will permanently be removed from your device and database.",
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("CANCEL"),
+            ),
+            TextButton(
+              onPressed: () {
+                if (widget.sale != null) {
+                  ref
+                      .read(saleProvider(widget.businessId).notifier)
+                      .deleteSale(widget.sale!.id, widget.businessId);
+                }
 
-              Navigator.pop(context);
-              Navigator.pop(context);
-            },
-            child: const Text("DELETE", style: TextStyle(color: Colors.red)),
-          ),
-        ],
+                Navigator.pop(context);
+
+                Navigator.pop(context);
+              },
+              child: const Text("DELETE", style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildDatePicker(ThemeData theme) {
+    return InkWell(
+      onTap: () async {
+        final d = await showDatePicker(
+          context: context,
+          initialDate: _selectedDate,
+          firstDate: DateTime(2020),
+          lastDate: DateTime.now(),
+        );
+
+        if (d != null) {
+          setState(() {
+            _selectedDate = d;
+          });
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.calendar_today,
+              size: 18,
+              color: theme.colorScheme.primary,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              DateFormat('EEEE, MMM d, yyyy').format(_selectedDate),
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildDatePicker(ThemeData theme) => InkWell(
-    onTap: () async {
-      final d = await showDatePicker(
-        context: context,
-        initialDate: _selectedDate,
-        firstDate: DateTime(2020),
-        lastDate: DateTime.now(),
-      );
-
-      if (d != null) {
-        setState(() {
-          _selectedDate = d;
-        });
-      }
-    },
-    child: Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.calendar_today,
-            size: 18,
-            color: theme.colorScheme.primary,
-          ),
-          const SizedBox(width: 12),
-          Text(
-            DateFormat('EEEE, MMM d, yyyy').format(_selectedDate),
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-        ],
-      ),
-    ),
-  );
-
-  Widget _buildBasketList(ThemeData theme) {
-    if (_selectedProducts.isEmpty) {
+  Widget _buildBasket(ThemeData theme) {
+    if (_basketItems.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
           border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
-          borderRadius: BorderRadius.circular(16),
         ),
         child: const Center(
           child: Text(
@@ -372,215 +430,220 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
         ),
       );
     }
-    return Column(
-      children: _selectedProducts
-          .map(
-            (p) => Padding(
-              padding: const EdgeInsets.only(
-                bottom: 8.0,
-              ), // 🔥 Added space between products
-              child: ListTile(
-                dense: true,
-                tileColor: theme.colorScheme.primary.withOpacity(0.05),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                title: Text(
-                  p.title.toUpperCase(),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
-                ),
-                trailing: IconButton(
-                  icon: const Icon(
-                    Icons.remove_circle_outline,
-                    color: Colors.redAccent,
-                    size: 20,
-                  ),
-                  onPressed: () => setState(() {
-                    _selectedProducts.removeWhere((e) => e.id == p.id);
-                    _updateProfit();
-                  }),
-                ),
-              ),
-            ),
-          )
-          .toList(),
-    );
-  }
-
-  Widget _buildMeasurementSection(ThemeData theme) {
-    final linearProduct = _selectedProducts.firstWhere(
-      (p) => p.unitType == "Meter" || p.unitType == "Gazz",
-    );
-
-    final unitType = linearProduct.unitType;
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionLabel("LINEAR MEASUREMENT"),
+      children: _basketItems.map((item) {
+        final product = item.product;
 
-        Container(
-          padding: const EdgeInsets.all(20),
+        final bool isLinear =
+            product.unitType == "Meter" || product.unitType == "Gazz";
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 14),
+          padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            color: theme.colorScheme.primary.withValues(alpha: 0.05),
-            borderRadius: BorderRadius.circular(24),
+            color: theme.colorScheme.primary.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(22),
             border: Border.all(
-              color: theme.colorScheme.primary.withValues(alpha: 0.1),
+              color: theme.colorScheme.primary.withOpacity(0.06),
             ),
           ),
           child: Column(
             children: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  RichText(
-                    text: TextSpan(
+                  Expanded(
+                    child: Text(
+                      product.title.toUpperCase(),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        item.dispose();
+
+                        _basketItems.remove(item);
+
+                        _recalculate();
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.08),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.delete_outline,
+                        color: Colors.redAccent,
+                        size: 18,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 18),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: _inputCard(
+                      theme,
+                      label: "QUANTITY",
+                      controller: item.qtyController,
+                      onChanged: (_) => _recalculate(),
+                    ),
+                  ),
+
+                  if (isLinear) const SizedBox(width: 12),
+
+                  if (isLinear)
+                    Expanded(
+                      child: _inputCard(
+                        theme,
+                        label:
+                            "MEASUREMENT (${product.unitType.toUpperCase()})",
+                        controller: item.measurementController,
+                        onChanged: (_) => _recalculate(),
+                      ),
+                    ),
+                ],
+              ),
+
+              if (isLinear) ...[
+                const SizedBox(height: 18),
+
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        TextSpan(
-                          text: _measurementValue.toStringAsFixed(2),
-                          style: TextStyle(
-                            fontSize: 28,
+                        Text(
+                          "LINEAR MEASUREMENT",
+                          style: const TextStyle(
+                            fontSize: 10,
                             fontWeight: FontWeight.w900,
-                            color: theme.colorScheme.primary,
+                            color: Colors.grey,
                           ),
                         ),
-                        TextSpan(
-                          text: " $unitType",
+                        Text(
+                          "${item.measurementController.text} ${product.unitType}",
                           style: TextStyle(
-                            fontSize: 14,
                             fontWeight: FontWeight.bold,
-                            color: theme.colorScheme.onSurface.withValues(
-                              alpha: 0.6,
-                            ),
+                            color: theme.colorScheme.primary,
                           ),
                         ),
                       ],
                     ),
-                  ),
 
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withValues(alpha: 0.08),
-                      shape: BoxShape.circle,
+                    Slider(
+                      value: (() {
+                        final parsed =
+                            double.tryParse(item.measurementController.text) ??
+                            1;
+
+                        return parsed.clamp(0.25, 20.0);
+                      })(),
+                      min: 0.25,
+                      max: 20,
+                      divisions: 79,
+                      activeColor: theme.colorScheme.primary,
+                      inactiveColor: theme.colorScheme.primary.withOpacity(
+                        0.15,
+                      ),
+                      onChanged: (v) {
+                        HapticFeedback.selectionClick();
+
+                        setState(() {
+                          item.measurementController.text = v.toStringAsFixed(
+                            2,
+                          );
+
+                          _recalculate();
+                        });
+                      },
                     ),
-                    child: Icon(
-                      Icons.straighten_rounded,
-                      color: theme.colorScheme.primary,
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 12),
-
-              Slider(
-                value: _measurementValue,
-                min: 0.25,
-                max: 10.0,
-                divisions: 39,
-                activeColor: theme.colorScheme.primary,
-                inactiveColor: theme.colorScheme.primary.withValues(
-                  alpha: 0.15,
+                  ],
                 ),
-                label: "${_measurementValue.toStringAsFixed(2)} $unitType",
-                onChanged: (val) {
-                  HapticFeedback.selectionClick();
-
-                  setState(() {
-                    _measurementValue = val;
-                    _updateProfit();
-                  });
-                },
-              ),
-
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    "0.25 $unitType",
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                    ),
-                  ),
-                  Text(
-                    "10 $unitType",
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                    ),
-                  ),
-                ],
-              ),
+              ],
             ],
           ),
-        ),
-      ],
+        );
+      }).toList(),
     );
   }
 
-  Widget _buildInputGrid(ThemeData theme) => Row(
-    children: [
-      Expanded(
-        child: _buildRefinedField(
-          theme,
-          label: "QTY",
-          controller: _qtyController,
-        ),
-      ),
-      const SizedBox(width: 12),
-      Expanded(
-        flex: 2,
-        child: _buildRefinedField(
-          theme,
-          label: "COLLECTIVE BILLING (PKR)",
-          controller: _priceController,
-        ),
-      ),
-    ],
-  );
+  Widget _buildBillingField(ThemeData theme) {
+    return _inputCard(
+      theme,
+      label: "TOTAL BILLING (PKR)",
+      controller: _billingController,
+      onChanged: (_) => _recalculate(),
+    );
+  }
 
-  Widget _buildRefinedField(
+  Widget _inputCard(
     ThemeData theme, {
     required String label,
     required TextEditingController controller,
-  }) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-    decoration: BoxDecoration(
-      color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.2),
-      borderRadius: BorderRadius.circular(16),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 9,
-            fontWeight: FontWeight.w900,
-            color: Colors.grey,
+    required Function(String) onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w900,
+              color: Colors.grey,
+              letterSpacing: 1,
+            ),
           ),
-        ),
-        TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          onChanged: (_) => _updateProfit(),
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-          decoration: const InputDecoration(
-            isCollapsed: true,
-            border: InputBorder.none,
-          ),
-        ),
-      ],
-    ),
-  );
+          const SizedBox(height: 6),
+          TextField(
+            controller: controller,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (value) {
+              if (label.contains("MEASUREMENT")) {
+                final parsed = double.tryParse(value);
 
-  Widget _buildProfitInsight(ThemeData theme) {
-    final isHealthy = _currentProfit >= 0;
+                if (parsed == null || parsed <= 0) {
+                  controller.text = "0.25";
+
+                  controller.selection = TextSelection.fromPosition(
+                    TextPosition(offset: controller.text.length),
+                  );
+                }
+              }
+
+              onChanged(value);
+            },
+            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
+            decoration: const InputDecoration(
+              border: InputBorder.none,
+              isCollapsed: true,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfitCard(ThemeData theme) {
+    final healthy = _profit >= 0;
 
     return Container(
       padding: const EdgeInsets.all(24),
@@ -612,7 +675,9 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
               ),
             ],
           ),
-          const Divider(height: 24),
+
+          const Divider(height: 28),
+
           Row(
             children: [
               _statBlock(
@@ -621,9 +686,9 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
                 theme.colorScheme.onSurface,
               ),
               _statBlock(
-                isHealthy ? "NET PROFIT" : "NET LOSS",
-                "Rs. ${_currentProfit.toStringAsFixed(0)}",
-                isHealthy ? Colors.green : Colors.red,
+                healthy ? "NET PROFIT" : "NET LOSS",
+                "Rs. ${_profit.toStringAsFixed(0)}",
+                healthy ? Colors.green : Colors.red,
               ),
             ],
           ),
@@ -632,90 +697,124 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
     );
   }
 
-  Widget _statBlock(String label, String value, Color color) => Expanded(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 9,
-            fontWeight: FontWeight.w900,
-            color: Colors.grey,
+  Widget _statBlock(String label, String value, Color color) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w900,
+              color: Colors.grey,
+            ),
           ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w900,
-            color: color,
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontWeight: FontWeight.w900,
+              fontSize: 16,
+              color: color,
+            ),
           ),
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 
-  Widget _buildBulkToggle(ThemeData theme) => SwitchListTile.adaptive(
-    value: _saveAndAddAnother,
-    onChanged: (v) {
-      setState(() {
-        _saveAndAddAnother = v;
-      });
-    },
-    title: const Text(
-      "Bulk Mode",
-      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-    ),
-    secondary: Icon(Icons.layers_outlined, color: theme.colorScheme.primary),
-    contentPadding: EdgeInsets.zero,
-  );
+  Widget _buildBulkToggle(ThemeData theme) {
+    return SwitchListTile.adaptive(
+      value: _saveAndAddAnother,
+      onChanged: (v) {
+        setState(() {
+          _saveAndAddAnother = v;
+        });
+      },
+      title: const Text(
+        "Bulk Mode",
+        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+      ),
+      secondary: Icon(Icons.layers_outlined, color: theme.colorScheme.primary),
+      contentPadding: EdgeInsets.zero,
+    );
+  }
 
-  Widget _buildConfirmButton(ThemeData theme) => Container(
-    padding: EdgeInsets.fromLTRB(
-      20,
-      12,
-      20,
-      MediaQuery.of(context).padding.bottom + 12,
-    ),
-    child: SizedBox(
-      width: double.infinity,
-      height: 58,
-      child: ElevatedButton(
-        onPressed: _selectedProducts.isEmpty ? null : _submit,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: theme.colorScheme.primary,
-          foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
+  Widget _buildSubmitButton(ThemeData theme) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        12,
+        20,
+        MediaQuery.of(context).padding.bottom + 12,
+      ),
+      child: SizedBox(
+        width: double.infinity,
+        height: 58,
+        child: ElevatedButton(
+          onPressed: _basketItems.isEmpty ? null : _submit,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: theme.colorScheme.primary,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
           ),
-        ),
-        child: Text(
-          _isEditMode ? "SAVE CHANGES" : "RECORD TRANSACTION",
-          style: const TextStyle(fontWeight: FontWeight.w900),
+          child: Text(
+            _isEditMode ? "SAVE CHANGES" : "RECORD TRANSACTION",
+            style: const TextStyle(fontWeight: FontWeight.w900),
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 
-  Widget _buildSectionLabel(String label) => Padding(
-    padding: const EdgeInsets.only(bottom: 8, top: 16),
-    child: Text(
-      label,
-      style: const TextStyle(
-        fontSize: 10,
-        fontWeight: FontWeight.w900,
-        color: Colors.grey,
-        letterSpacing: 1.5,
+  Widget _buildSectionLabel(String label) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8, top: 16),
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w900,
+          color: Colors.grey,
+          letterSpacing: 1.5,
+        ),
       ),
-    ),
-  );
+    );
+  }
+}
+
+class _SaleBasketItem {
+  final ProductModel product;
+
+  final TextEditingController qtyController;
+
+  final TextEditingController measurementController;
+
+  _SaleBasketItem({
+    required this.product,
+    double quantity = 1,
+    double measurement = 1,
+  }) : qtyController = TextEditingController(
+         text: quantity.toStringAsFixed(quantity % 1 == 0 ? 0 : 2),
+       ),
+       measurementController = TextEditingController(
+         text: measurement.toStringAsFixed(2),
+       );
+
+  void dispose() {
+    qtyController.dispose();
+    measurementController.dispose();
+  }
 }
 
 class _ProductDropdown extends StatefulWidget {
   final List<ProductModel> products;
+
   final List<ProductModel> selectedProducts;
+
   final Function(ProductModel) onSelected;
 
   const _ProductDropdown({
@@ -731,18 +830,6 @@ class _ProductDropdown extends StatefulWidget {
 
 class _ProductDropdownState extends State<_ProductDropdown> {
   @override
-  void didUpdateWidget(covariant _ProductDropdown oldWidget) {
-    super.didUpdateWidget(oldWidget);
-
-    /// 🔥 FULL RESET WHEN CATEGORY CHANGES
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        setState(() {});
-      }
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
@@ -753,8 +840,8 @@ class _ProductDropdownState extends State<_ProductDropdown> {
     );
 
     return DropdownButtonFormField<ProductModel>(
-      isExpanded: true,
       value: null,
+      isExpanded: true,
       hint: const Text("Tap to add item...", style: TextStyle(fontSize: 13)),
       decoration: InputDecoration(
         filled: true,
@@ -785,9 +872,8 @@ class _ProductDropdownState extends State<_ProductDropdown> {
                   ),
                 ),
               ),
-
               if (alreadySelected)
-                const Icon(Icons.check_circle, size: 16, color: Colors.green),
+                const Icon(Icons.check_circle, color: Colors.green, size: 16),
             ],
           ),
         );
