@@ -6,6 +6,7 @@ class UserModel {
   final String name;
   final String email;
   final String password;
+  final String? profilePic;
   final DateTime createdAt;
 
   // 🔐 Verification Flag
@@ -20,6 +21,7 @@ class UserModel {
     required this.name,
     required this.email,
     required this.password,
+    this.profilePic,
     required this.createdAt,
     required this.isEmailVerified, // New required field
     required this.isSynced,
@@ -32,6 +34,7 @@ class UserModel {
     String? name,
     String? email,
     String? password,
+    String? profilePic,
     DateTime? createdAt,
     bool? isEmailVerified,
     bool? isSynced,
@@ -42,6 +45,7 @@ class UserModel {
       name: name ?? this.name,
       email: email ?? this.email,
       password: password ?? this.password,
+      profilePic: profilePic ?? this.profilePic,
       createdAt: createdAt ?? this.createdAt,
       isEmailVerified: isEmailVerified ?? this.isEmailVerified,
       isSynced: isSynced ?? this.isSynced,
@@ -56,6 +60,7 @@ class UserModel {
       'name': name,
       'email': email,
       'password': password,
+      'profilePic': profilePic,
       'isEmailVerified': isEmailVerified, // Save status to cloud
       'createdAt': Timestamp.fromDate(createdAt),
     };
@@ -67,6 +72,7 @@ class UserModel {
       name: map['name'] ?? '',
       email: map['email'] ?? '',
       password: map['password'] ?? '',
+      profilePic: map['profilePic'] as String?,
       isEmailVerified:
           map['isEmailVerified'] ?? false, // Load status from cloud
       createdAt: map['createdAt'] is Timestamp
@@ -84,6 +90,7 @@ class UserModel {
       'name': name,
       'email': email,
       'password': password,
+      'profilePic': profilePic,
       'isEmailVerified': isEmailVerified ? 1 : 0, // SQLite friendly
       'createdAt': createdAt.toIso8601String(),
       'isSynced': isSynced ? 1 : 0,
@@ -97,6 +104,7 @@ class UserModel {
       name: json['name'] ?? '',
       email: json['email'] ?? '',
       password: json['password'] ?? '',
+      profilePic: json['profilePic'] as String?,
       isEmailVerified: (json['isEmailVerified'] ?? 0) == 1,
       createdAt: DateTime.parse(json['createdAt']),
       isSynced: (json['isSynced'] ?? 0) == 1,
@@ -121,6 +129,7 @@ class UserModel {
         other.name == name &&
         other.email == email &&
         other.password == password &&
+        other.profilePic == profilePic &&
         other.createdAt == createdAt &&
         other.isEmailVerified == isEmailVerified &&
         other.isSynced == isSynced &&
@@ -133,6 +142,7 @@ class UserModel {
         name.hashCode ^
         email.hashCode ^
         password.hashCode ^
+        profilePic.hashCode ^
         createdAt.hashCode ^
         isEmailVerified.hashCode ^
         isSynced.hashCode ^
@@ -141,6 +151,6 @@ class UserModel {
 
   @override
   String toString() {
-    return 'UserModel(uid: $uid, name: $name, isEmailVerified: $isEmailVerified, isSynced: $isSynced)';
+    return 'UserModel(uid: $uid, name: $name, isEmailVerified: $isEmailVerified, isSynced: $isSynced, profilePic: $profilePic)';
   }
 }

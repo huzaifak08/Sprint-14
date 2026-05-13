@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:sprint_14/models/user_model.dart';
 import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
 import 'package:sprint_14/providers/user_provider/user_provider.dart';
@@ -27,6 +30,20 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
   void dispose() {
     _nameController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickAndUploadImage(UserModel user) async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 50,
+    );
+
+    if (pickedFile != null) {
+      await ref
+          .read(userProvider.notifier)
+          .updateProfile(user, imageFile: File(pickedFile.path));
+    }
   }
 
   Future<void> _handleUpdateName(UserModel user) async {
@@ -129,43 +146,68 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
   Widget _buildAvatar(ThemeData theme, UserModel user) {
     return Column(
       children: [
-        Container(
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: theme.colorScheme.primary, width: 2),
-          ),
-          child: CircleAvatar(
-            radius: 50,
-            backgroundColor: theme.colorScheme.primaryContainer,
-            child: Text(
-              user.name.isNotEmpty ? user.name[0].toUpperCase() : "U",
-              style: TextStyle(
-                fontSize: 40,
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.primary,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        if (!user.isSynced)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.sync_problem,
-                size: 16,
-                color: theme.colorScheme.error,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                "Sync pending...",
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.error,
+        Stack(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: theme.colorScheme.primary.withOpacity(0.2),
+                  width: 2,
                 ),
               ),
-            ],
+              child: CircleAvatar(
+                radius: 60,
+                backgroundColor: theme.colorScheme.primaryContainer,
+                backgroundImage: user.profilePic != null
+                    ? (user.profilePic!.startsWith('http')
+                          ? NetworkImage(user.profilePic!)
+                          : FileImage(File(user.profilePic!)) as ImageProvider)
+                    : null,
+                child: user.profilePic == null
+                    ? Text(
+                        user.name[0].toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 40,
+                          fontWeight: FontWeight.w900,
+                          color: theme.colorScheme.primary,
+                        ),
+                      )
+                    : null,
+              ),
+            ),
+            Positioned(
+              bottom: 0,
+              right: 0,
+              child: GestureDetector(
+                onTap: () => _pickAndUploadImage(user),
+                child: CircleAvatar(
+                  radius: 20,
+                  backgroundColor: theme.colorScheme.primary,
+                  child: const Icon(
+                    Icons.camera_alt_rounded,
+                    size: 20,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        if (!user.isSynced)
+          Chip(
+            label: const Text(
+              "Syncing...",
+              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+            ),
+            avatar: const SizedBox(
+              width: 12,
+              height: 12,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            backgroundColor: theme.colorScheme.errorContainer.withOpacity(0.3),
           ),
       ],
     );

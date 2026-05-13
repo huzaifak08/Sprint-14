@@ -14,6 +14,8 @@ class BusinessTable {
         currency TEXT NOT NULL,
         createdAt TEXT NOT NULL,
         ownerId TEXT NOT NULL,
+        logoPath TEXT,
+        participantIds TEXT,
         isSynced INTEGER NOT NULL,
         lastSyncAttempt TEXT,
         isDeleted INTEGER NOT NULL

@@ -27,7 +27,7 @@ class LocalCacheManager {
 
     return openDatabase(
       path,
-      version: 6, // Increment version number when schema changes
+      version: 8, // Increment version number when schema changes
       onCreate: (db, version) async {
         // await ProjectTable.createTable(db);
         await LedgerTable.createTable(db);
@@ -78,20 +78,45 @@ class LocalCacheManager {
             await db.execute("DROP TABLE IF EXISTS sales");
             await SaleTable.createTable(db);
           }
+        }
 
-          if (oldVersion < 6) {
-            try {
-              await db.execute(
-                "ALTER TABLE sales ADD COLUMN measurement REAL NOT NULL DEFAULT 1.0",
-              );
-              dev.log(
-                "Database Upgraded to v6: Added measurement column to sales table",
-              );
-            } catch (e) {
-              dev.log("Migration Error v6: $e");
-            }
+        if (oldVersion < 6) {
+          try {
+            await db.execute(
+              "ALTER TABLE sales ADD COLUMN measurement REAL NOT NULL DEFAULT 1.0",
+            );
+            dev.log(
+              "Database Upgraded to v6: Added measurement column to sales table",
+            );
+          } catch (e) {
+            dev.log("Migration Error v6: $e");
           }
         }
+
+        if (oldVersion < 7) {
+          try {
+            await db.execute("ALTER TABLE businesses ADD COLUMN logoPath TEXT");
+            await db.execute(
+              "ALTER TABLE businesses ADD COLUMN participantIds TEXT",
+            );
+            dev.log(
+              "Database Upgraded to v7: Added logo and participants to businesses",
+            );
+          } catch (e) {
+            dev.log("Migration Error v7: $e");
+          }
+        }
+
+        if (oldVersion < 8) {
+          try {
+            await db.execute("ALTER TABLE users ADD COLUMN profilePic TEXT");
+            dev.log("Database Upgraded to v8: Added profilePic to users table");
+          } catch (e) {
+            dev.log("Migration Error v8: $e");
+          }
+        }
+
+        // New Changes Here:
       },
     );
   }

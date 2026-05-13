@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:sprint_14/cache/tables/user_table.dart';
 import 'package:sprint_14/models/user_model.dart';
 import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
+import 'package:sprint_14/services/storage_service.dart';
 import 'package:sprint_14/services/user_service.dart';
 import 'dart:developer' as dev;
 
@@ -63,24 +66,37 @@ class UserNotifier extends _$UserNotifier {
 
   // --- CRUD & Sync Methods (Same as Project/Ledger Providers) ---
 
-  /// Update user profile (Optimistic UI approach)
-  Future<void> updateProfile(UserModel updatedUser) async {
-    // 1. Update UI and Cache immediately (isSynced = false)
-    final localUpdate = updatedUser.copyWith(isSynced: false);
+  Future<void> updateProfile(UserModel updatedUser, {File? imageFile}) async {
+    // 1. Optimistic Update (Local first)
+    // If we have a new local image, we show the local path temporarily
+    final localUpdate = updatedUser.copyWith(
+      isSynced: false,
+      profilePic: imageFile?.path ?? updatedUser.profilePic,
+    );
     state = AsyncData(localUpdate);
     await UserTable.saveUser(localUpdate);
 
     try {
-      // 2. Update Firestore
-      await _userService.saveOrUpdateUser(localUpdate);
+      String? finalImageUrl = updatedUser.profilePic;
 
-      // 3. Mark as synced on success
-      final syncedUser = localUpdate.copyWith(isSynced: true);
+      // 2. Upload to Storage if a new file is provided
+      if (imageFile != null) {
+        finalImageUrl = await StorageService().uploadProfilePic(
+          updatedUser.uid,
+          imageFile,
+        );
+      }
+
+      // 3. Update Firestore with the new URL
+      final userToSync = localUpdate.copyWith(profilePic: finalImageUrl);
+      await _userService.saveOrUpdateUser(userToSync);
+
+      // 4. Final Sync
+      final syncedUser = userToSync.copyWith(isSynced: true);
       await UserTable.saveUser(syncedUser);
       state = AsyncData(syncedUser);
     } catch (e) {
-      dev.log("Failed to sync user update: $e");
-      // Optional: Rollback or keep as unsynced for later
+      dev.log("Failed to sync user profile: $e");
     }
   }
 

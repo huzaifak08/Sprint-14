@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sprint_14/cache/tables/business_table.dart';
@@ -193,17 +195,25 @@ class SettingsView extends ConsumerWidget {
           children: [
             CircleAvatar(
               radius: 32,
-              backgroundColor: Colors.white24,
-              child: Text(
-                user?.name.isNotEmpty == true
-                    ? user!.name[0].toUpperCase()
-                    : "U",
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+              backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
+              // 🔥 Using backgroundImage is cleaner than nesting an Image widget
+              backgroundImage: user?.profilePic != null
+                  ? (user!.profilePic!.startsWith('http')
+                        ? NetworkImage(user.profilePic!)
+                        : FileImage(File(user.profilePic!)) as ImageProvider)
+                  : null,
+              child: user?.profilePic == null
+                  ? Text(
+                      user?.name.isNotEmpty == true
+                          ? user!.name[0].toUpperCase()
+                          : "U",
+                      style: TextStyle(
+                        color: theme.colorScheme.primary,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    )
+                  : null,
             ),
             const SizedBox(width: 16),
             Expanded(

@@ -1,5 +1,6 @@
+import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:sprint_14/cache/tables/business_table.dart';
 import 'package:sprint_14/models/business_model.dart';
@@ -8,52 +9,42 @@ import 'package:sprint_14/providers/user_provider/user_provider.dart';
 import 'package:sprint_14/services/business_service.dart';
 import 'dart:developer' as dev;
 
+import 'package:sprint_14/services/storage_service.dart';
+
 part 'business_provider.g.dart';
 
 @Riverpod(keepAlive: true)
 class BusinessNotifier extends _$BusinessNotifier {
-  User? get _user => ref.read(authControllerProvider).value;
-
   @override
   Future<List<BusinessModel>> build() async {
-    // 🔥 Watch the user state. If user changes, build() re-runs.
-    final userState = ref.watch(userProvider);
-    final user = userState.value;
+    // Watch user state to auto-refresh on logout/login
+    final user = ref.watch(userProvider).value;
+    if (user == null) return [];
 
-    if (user == null) {
-      dev.log(
-        "No user found in BusinessNotifier, returning empty list",
-        name: "BusinessProvider",
-      );
-      return [];
-    }
-
-    // Load initial data from local cache immediately for fast UI response
+    // 1. Load from Local Cache immediately
     final cache = await BusinessTable.getAllBusinessesFromCache();
 
-    // Trigger background sync/cloud fetch without blocking the UI return
+    // 2. Silent background sync
     _fetchAndSyncFromCloud(user.uid);
 
     return cache;
   }
 
-  /// 1. Cloud Fetch & Merge (Silent background update)
+  /// --- CLOUD LOAD & MERGE ---
   Future<void> _fetchAndSyncFromCloud(String uid) async {
     try {
       final service = BusinessService(uid: uid);
       final cloud = await service.getAllBusinesses();
       final currentList = state.value ?? [];
 
-      if (cloud.isEmpty && currentList.isEmpty) return;
-
       final Map<String, BusinessModel> currentMap = {
         for (final b in currentList) b.id: b,
       };
-
       final List<BusinessModel> merged = [];
+
       for (final c in cloud) {
         final local = currentMap[c.id];
-        // If local exists and is not synced, keep local. Otherwise take cloud version.
+        // If local has unsynced changes, prioritize local, otherwise take cloud
         if (local != null && !local.isSynced) {
           merged.add(local);
         } else {
@@ -63,29 +54,32 @@ class BusinessNotifier extends _$BusinessNotifier {
 
       await BusinessTable.saveAllFetchedBusinesses(merged);
       state = AsyncData(merged);
+
+      // Post-fetch sync for any pending local changes
       syncPending();
     } catch (e) {
       dev.log("Cloud Fetch Error: $e", name: "BusinessProvider");
     }
   }
 
-  /// 2. Add Business
+  /// --- ADD BUSINESS ---
   Future<void> addBusiness(BusinessModel business) async {
     final local = business.copyWith(isSynced: false, isDeleted: false);
-    await BusinessTable.saveSingleBusiness(local);
 
+    // Optimistic UI update
     final current = state.value ?? [];
     state = AsyncData([local, ...current]);
+
+    await BusinessTable.saveSingleBusiness(local);
     syncPending();
   }
 
-  /// 3. Update Business
+  /// --- UPDATE BUSINESS ---
   Future<void> updateBusiness(BusinessModel updated) async {
     final local = updated.copyWith(isSynced: false);
-    final current = state.value ?? [];
 
     state = AsyncData([
-      for (final b in current)
+      for (final b in state.value ?? [])
         if (b.id == local.id) local else b,
     ]);
 
@@ -93,62 +87,91 @@ class BusinessNotifier extends _$BusinessNotifier {
     syncPending();
   }
 
-  /// 4. Delete Business (Soft Delete)
+  /// --- DELETE BUSINESS (Soft) ---
   Future<void> deleteBusiness(String id) async {
     final current = state.value ?? [];
     final business = current.firstWhere((b) => b.id == id);
     final deletedMarker = business.copyWith(isDeleted: true, isSynced: false);
 
+    // Remove from UI immediately
     state = AsyncData(current.where((b) => b.id != id).toList());
+
     await BusinessTable.saveSingleBusiness(deletedMarker);
     syncPending();
   }
 
-  /// 5. Manual Sync Trigger (Useful for Splash)
-  Future<List<BusinessModel>> forceRefresh() async {
-    final user = ref.read(userProvider).value;
-    if (user == null) return [];
-
-    final businesses = await BusinessTable.getAllBusinessesFromCache();
-    state = AsyncData(businesses);
-    return businesses;
-  }
-
-  /// 6. Background Sync Logic
+  /// --- FULL SYNC LOGIC (Storage + Firestore) ---
   Future<void> syncPending() async {
-    if (_user == null) return;
+    final authUser = ref.read(authControllerProvider).value;
+    if (authUser == null) return;
 
     final connectivity = await Connectivity().checkConnectivity();
     if (connectivity.contains(ConnectivityResult.none)) return;
 
-    final service = BusinessService(uid: _user?.uid ?? "NO UID");
+    final service = BusinessService(uid: authUser.uid);
     final unsynced = await BusinessTable.getUnsyncedBusinesses();
 
     for (final b in unsynced) {
       try {
+        // --- HANDLE DELETION ---
         if (b.isDeleted) {
-          final success = await service.deleteBusinessData(businessId: b.id);
-          if (success) await BusinessTable.hardDelete(b.id);
-        } else {
-          final success = await service.saveBusiness(business: b);
-          if (success) {
-            final synced = b.copyWith(
-              isSynced: true,
-              lastSyncAttempt: DateTime.now(),
-            );
-            await BusinessTable.saveSingleBusiness(synced);
+          // 1. Delete Logo from Storage using the correct path
+          await StorageService().deleteBusinessLogo(b.id);
 
-            final current = state.value ?? [];
-            state = AsyncData([
-              for (final item in current)
-                if (item.id == synced.id) synced else item,
-            ]);
+          // 2. Delete Data from Firestore
+          final success = await service.deleteBusinessData(businessId: b.id);
+
+          // 3. Remove from Local Cache
+          if (success) await BusinessTable.hardDelete(b.id);
+          continue;
+        }
+
+        // --- HANDLE UPLOAD/SAVE ---
+        String? finalLogoUrl = b.logoPath;
+
+        if (b.logoPath != null && !b.logoPath!.startsWith('http')) {
+          final file = File(b.logoPath!);
+          if (await file.exists()) {
+            // 🔥 UPLOAD PATH: businesses/{id}/logo.jpg
+            final storageRef = FirebaseStorage.instance
+                .ref()
+                .child('businesses')
+                .child(b.id)
+                .child('logo.jpg');
+
+            await storageRef.putFile(file);
+            finalLogoUrl = await storageRef.getDownloadURL();
           }
+        }
+
+        final toSync = b.copyWith(logoPath: finalLogoUrl);
+        final success = await service.saveBusiness(business: toSync);
+
+        if (success) {
+          final synced = toSync.copyWith(
+            isSynced: true,
+            lastSyncAttempt: DateTime.now(),
+          );
+          await BusinessTable.saveSingleBusiness(synced);
+
+          // Update State
+          final current = state.value ?? [];
+          state = AsyncData([
+            for (final item in current)
+              if (item.id == synced.id) synced else item,
+          ]);
         }
       } catch (e) {
         dev.log("Sync Failed for ${b.id}: $e", name: "BusinessProvider");
       }
     }
+  }
+
+  /// --- MANUAL REFRESH ---
+  Future<void> forceRefresh() async {
+    final user = ref.read(userProvider).value;
+    if (user == null) return;
+    await _fetchAndSyncFromCloud(user.uid);
   }
 }
 
