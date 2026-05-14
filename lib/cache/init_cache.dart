@@ -1,5 +1,6 @@
 import 'dart:developer' as dev;
 import 'package:sprint_14/cache/tables/business_table.dart';
+import 'package:sprint_14/cache/tables/expense_table.dart';
 import 'package:sprint_14/cache/tables/ledger_table.dart';
 import 'package:sprint_14/cache/tables/product_table.dart';
 import 'package:sprint_14/cache/tables/sale_table.dart';
@@ -27,7 +28,7 @@ class LocalCacheManager {
 
     return openDatabase(
       path,
-      version: 8, // Increment version number when schema changes
+      version: 10, // Increment version number when schema changes
       onCreate: (db, version) async {
         // await ProjectTable.createTable(db);
         await LedgerTable.createTable(db);
@@ -38,13 +39,6 @@ class LocalCacheManager {
         await SettingsTable.createTable(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
-        if (oldVersion < 3) {
-          await BusinessTable.createTable(db);
-          await ProductTable.createTable(db);
-          await SaleTable.createTable(db);
-          await SettingsTable.createTable(db);
-        }
-
         if (oldVersion < 4) {
           try {
             await db.execute(
@@ -114,6 +108,24 @@ class LocalCacheManager {
           } catch (e) {
             dev.log("Migration Error v8: $e");
           }
+        }
+
+        if (oldVersion < 10) {
+          await ExpenseTable.createTable(db);
+          dev.log("Database Upgraded to v9: Added Expense Table");
+        }
+
+        try {
+          // 🔥 This adds the missing column to your existing 'users' table
+          await db.execute(
+            "ALTER TABLE users ADD COLUMN createdAt TEXT NOT NULL DEFAULT ''",
+          );
+          dev.log(
+            "Database Upgraded to v10: Added createdAt to users table",
+            name: "init Cache",
+          );
+        } catch (e) {
+          dev.log("Migration Error v9: $e", name: "init Cache");
         }
 
         // New Changes Here:

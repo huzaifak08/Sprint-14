@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:sprint_14/components/app_network_image.dart';
 import 'package:sprint_14/models/user_model.dart';
 import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
 import 'package:sprint_14/providers/user_provider/user_provider.dart';
@@ -148,46 +149,37 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
       children: [
         Stack(
           children: [
+            // The Outer Border ring
             Container(
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: theme.colorScheme.primary.withOpacity(0.2),
+                  color: theme.colorScheme.primary.withValues(alpha: 0.2),
                   width: 2,
                 ),
               ),
-              child: CircleAvatar(
-                radius: 60,
-                backgroundColor: theme.colorScheme.primaryContainer,
-                backgroundImage: user.profilePic != null
-                    ? (user.profilePic!.startsWith('http')
-                          ? NetworkImage(user.profilePic!)
-                          : FileImage(File(user.profilePic!)) as ImageProvider)
-                    : null,
-                child: user.profilePic == null
-                    ? Text(
-                        user.name[0].toUpperCase(),
-                        style: TextStyle(
-                          fontSize: 40,
-                          fontWeight: FontWeight.w900,
-                          color: theme.colorScheme.primary,
-                        ),
-                      )
-                    : null,
+              // 🔥 Using your Unified Image Widget
+              child: AppNetworkImage(
+                path: user.profilePic,
+                size: 120, // radius 60 * 2 = 120
+                isCircle: true,
+                fallbackLetter: user.name.isNotEmpty ? user.name[0] : "U",
               ),
             ),
+
+            // Camera Action Button
             Positioned(
-              bottom: 0,
-              right: 0,
+              bottom: 4, // Adjusted slightly for the padding
+              right: 4,
               child: GestureDetector(
                 onTap: () => _pickAndUploadImage(user),
                 child: CircleAvatar(
-                  radius: 20,
+                  radius: 18,
                   backgroundColor: theme.colorScheme.primary,
                   child: const Icon(
                     Icons.camera_alt_rounded,
-                    size: 20,
+                    size: 18,
                     color: Colors.white,
                   ),
                 ),
@@ -196,18 +188,30 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
           ],
         ),
         const SizedBox(height: 16),
+
+        // Sync Status
         if (!user.isSynced)
           Chip(
+            visualDensity: VisualDensity.compact,
             label: const Text(
-              "Syncing...",
-              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+              "PENDING SYNC",
+              style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1,
+              ),
             ),
-            avatar: const SizedBox(
-              width: 12,
-              height: 12,
-              child: CircularProgressIndicator(strokeWidth: 2),
+            avatar: SizedBox(
+              width: 10,
+              height: 10,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: theme.colorScheme.primary,
+              ),
             ),
-            backgroundColor: theme.colorScheme.errorContainer.withOpacity(0.3),
+            backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
+            side: BorderSide.none,
+            shape: StadiumBorder(),
           ),
       ],
     );

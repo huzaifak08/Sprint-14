@@ -1,16 +1,11 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:sprint_14/cache/tables/business_table.dart';
-import 'package:sprint_14/cache/tables/ledger_table.dart';
-import 'package:sprint_14/cache/tables/product_table.dart';
-import 'package:sprint_14/cache/tables/project_table.dart';
-import 'package:sprint_14/cache/tables/sale_table.dart';
-import 'package:sprint_14/cache/tables/user_table.dart';
+import 'package:sprint_14/cache/init_cache.dart';
+import 'package:sprint_14/components/app_network_image.dart';
 import 'package:sprint_14/models/user_model.dart';
 import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
 import 'package:sprint_14/providers/biometric_provider/biometric_provider.dart';
+import 'package:sprint_14/providers/expense_provider/expense_provider.dart';
 import 'package:sprint_14/providers/ledger_provider/ledger_provider.dart';
 import 'package:sprint_14/providers/business_provider/business_provider.dart';
 import 'package:sprint_14/providers/product_provider/product_provider.dart';
@@ -193,27 +188,13 @@ class SettingsView extends ConsumerWidget {
         ),
         child: Row(
           children: [
-            CircleAvatar(
-              radius: 32,
-              backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
-              // 🔥 Using backgroundImage is cleaner than nesting an Image widget
-              backgroundImage: user?.profilePic != null
-                  ? (user!.profilePic!.startsWith('http')
-                        ? NetworkImage(user.profilePic!)
-                        : FileImage(File(user.profilePic!)) as ImageProvider)
-                  : null,
-              child: user?.profilePic == null
-                  ? Text(
-                      user?.name.isNotEmpty == true
-                          ? user!.name[0].toUpperCase()
-                          : "U",
-                      style: TextStyle(
-                        color: theme.colorScheme.primary,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    )
-                  : null,
+            AppNetworkImage(
+              path: user?.profilePic,
+              size: 64, // radius 32 * 2 = 64
+              isCircle: true,
+              fallbackLetter: user?.name.isNotEmpty == true
+                  ? user!.name[0]
+                  : "U",
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -327,18 +308,15 @@ class SettingsView extends ConsumerWidget {
           ),
           ElevatedButton(
             onPressed: () async {
-              await SaleTable.clearAllSales();
-              await ProjectTable.deleteAllProjects();
-              await ProductTable.deleteAllProducts();
-              await BusinessTable.deleteAllBusinesses();
-              await LedgerTable.deleteAllLedgers();
-              await UserTable.deleteAllUsers();
+              await LocalCacheManager.deleteAllCacheData();
 
               ref.invalidate(userProvider);
               ref.invalidate(ledgerProvider);
               ref.invalidate(businessProvider);
               ref.invalidate(saleProvider);
               ref.invalidate(productProvider);
+              ref.invalidate(expenseProvider);
+              ref.invalidate(appSettingsProvider);
 
               await ref.read(authControllerProvider.notifier).logout();
               if (context.mounted) {

@@ -2,6 +2,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sprint_14/providers/business_provider/business_provider.dart';
+import 'package:sprint_14/providers/expense_provider/expense_provider.dart';
 import 'package:sprint_14/providers/product_provider/product_provider.dart';
 import 'package:sprint_14/providers/sale_provider/sale_provider.dart';
 import 'package:sprint_14/views/business_views/add_update_sale_view.dart';
@@ -11,6 +12,7 @@ import 'package:sprint_14/views/business_views/business_dashboard_view/component
 import 'package:sprint_14/views/business_views/business_dashboard_view/components/sales_data_table.dart';
 import 'package:sprint_14/views/business_views/business_dashboard_view/components/summary_card.dart';
 import 'package:sprint_14/views/business_views/business_dashboard_view/components/weekly_trend_chart.dart';
+import 'package:sprint_14/views/business_views/expense_view/expense_view.dart';
 import 'package:sprint_14/views/business_views/manage_products_view.dart';
 
 class BusinessDashboardView extends ConsumerStatefulWidget {
@@ -42,6 +44,9 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView>
         ref
             .read(saleProvider(widget.businessId).notifier)
             .syncPending(widget.businessId);
+        ref
+            .read(expenseProvider(widget.businessId).notifier)
+            .syncPending(widget.businessId);
       }
     });
   }
@@ -56,7 +61,37 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView>
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      floatingActionButton: _buildFab(context, theme),
+      floatingActionButton: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          _buildFab(
+            context,
+            theme,
+            "EXPENSE",
+            () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ExpenseView(businessId: widget.businessId),
+              ),
+            ),
+          ),
+
+          const SizedBox(width: 12),
+
+          _buildFab(
+            context,
+            theme,
+            "SALE",
+            () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) =>
+                    AddUpdateSaleView(businessId: widget.businessId),
+              ),
+            ),
+          ),
+        ],
+      ),
       body: saleState.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, s) => Center(child: Text("Error: $e")),
@@ -98,7 +133,10 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView>
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
-                    SummaryCard(sales: filteredSales),
+                    SummaryCard(
+                      sales: filteredSales,
+                      businessId: widget.businessId,
+                    ),
                     const SizedBox(height: 24),
                     WeeklyTrendChart(sales: filteredSales),
                     const SizedBox(height: 24),
@@ -123,21 +161,21 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView>
     );
   }
 
-  Widget _buildFab(BuildContext context, ThemeData theme) {
+  Widget _buildFab(
+    BuildContext context,
+    ThemeData theme,
+    String title,
+    VoidCallback onPressed,
+  ) {
     return FloatingActionButton.extended(
       heroTag: null, // 🔥 FIX: Prevents lag and multiple hero tag exceptions
-      onPressed: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => AddUpdateSaleView(businessId: widget.businessId),
-        ),
-      ),
+      onPressed: onPressed,
       backgroundColor: theme.colorScheme.primary,
       foregroundColor: theme.colorScheme.onPrimary,
       elevation: 4,
       icon: const Icon(Icons.add_shopping_cart_rounded, size: 20),
-      label: const Text(
-        "RECORD SALE",
+      label: Text(
+        title,
         style: TextStyle(
           fontWeight: FontWeight.w900,
           letterSpacing: 1.2,

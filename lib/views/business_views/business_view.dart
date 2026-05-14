@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:sprint_14/components/app_network_image.dart';
 import 'package:uuid/uuid.dart';
 import 'package:sprint_14/models/business_model.dart';
 import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
@@ -17,17 +18,6 @@ class BusinessView extends ConsumerWidget {
     final businesses = ref.watch(businessProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          "BUSINESS HUB",
-          style: TextStyle(
-            fontWeight: FontWeight.w900,
-            fontSize: 14,
-            letterSpacing: 2,
-          ),
-        ),
-        centerTitle: true,
-      ),
       body: businesses.when(
         data: (bus) => bus.isEmpty
             ? _buildEmptyState(context, ref, theme)
@@ -127,7 +117,13 @@ class _BusinessCard extends ConsumerWidget {
           ),
           onLongPress: () => _showOptions(context, ref),
           contentPadding: const EdgeInsets.all(16),
-          leading: _buildLogo(theme),
+          leading: AppNetworkImage(
+            path: business.logoPath,
+            size: 55,
+            isCircle: false,
+            borderRadius: 15,
+            fallbackLetter: business.name.isNotEmpty ? business.name[0] : 'B',
+          ),
           title: Text(
             business.name.toUpperCase(),
             style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
@@ -204,32 +200,6 @@ class _BusinessCard extends ConsumerWidget {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildLogo(ThemeData theme) {
-    final path = business.logoPath;
-    return Container(
-      width: 55,
-      height: 55,
-      decoration: BoxDecoration(
-        color: theme.colorScheme.primary.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(15),
-        image: path != null
-            ? (path.startsWith('http')
-                  ? DecorationImage(
-                      image: NetworkImage(path),
-                      fit: BoxFit.cover,
-                    )
-                  : DecorationImage(
-                      image: FileImage(File(path)),
-                      fit: BoxFit.cover,
-                    ))
-            : null,
-      ),
-      child: path == null
-          ? Icon(Icons.business, color: theme.colorScheme.primary)
-          : null,
     );
   }
 }

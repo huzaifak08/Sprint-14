@@ -6,6 +6,7 @@ final String ledgersCollection = "ledgers";
 final String businessesCollection = "businesses";
 final String productsCollection = "products";
 final String salesCollection = "sales";
+final String expensesCollection = "expenses";
 
 final String themeKey = "sprint-14-theme";
 
