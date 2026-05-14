@@ -6,7 +6,7 @@ import 'package:sprint_14/models/business_model.dart';
 import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
 import 'package:sprint_14/providers/business_provider/business_provider.dart';
 import 'package:sprint_14/providers/settings_provider/settings_provider.dart';
-import 'package:sprint_14/providers/user_provider/user_provider.dart';
+import 'package:sprint_14/providers/current_user_provider/current_user_provider.dart';
 import 'package:sprint_14/views/auth/sign_in_view.dart';
 import 'package:sprint_14/views/auth/verify_email_view.dart';
 import 'package:sprint_14/views/business_views/business_dashboard_view/business_dashboard_view.dart';
@@ -81,7 +81,7 @@ class _SplashViewState extends ConsumerState<SplashView>
     // 1. 🔥 FIRST: Wait for the UserProvider to be ready
     // This ensures the BusinessNotifier has a UID when it builds.
     dev.log('👤 Waiting for User session...', name: 'SplashView');
-    final user = await ref.read(userProvider.future);
+    final user = await ref.read(currentUserProvider.future);
 
     if (user == null) {
       dev.log(

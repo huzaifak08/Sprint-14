@@ -5,13 +5,9 @@ import 'package:sprint_14/components/app_network_image.dart';
 import 'package:sprint_14/models/user_model.dart';
 import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
 import 'package:sprint_14/providers/biometric_provider/biometric_provider.dart';
-import 'package:sprint_14/providers/expense_provider/expense_provider.dart';
-import 'package:sprint_14/providers/ledger_provider/ledger_provider.dart';
 import 'package:sprint_14/providers/business_provider/business_provider.dart';
-import 'package:sprint_14/providers/product_provider/product_provider.dart';
-import 'package:sprint_14/providers/sale_provider/sale_provider.dart';
 import 'package:sprint_14/providers/settings_provider/settings_provider.dart';
-import 'package:sprint_14/providers/user_provider/user_provider.dart';
+import 'package:sprint_14/providers/current_user_provider/current_user_provider.dart';
 import 'package:sprint_14/views/auth/sign_in_view.dart';
 import 'package:sprint_14/views/profile_view.dart';
 import 'dart:developer' as dev;
@@ -31,7 +27,7 @@ class SettingsView extends ConsumerWidget {
     final securityState = ref.watch(securityProvider);
     final securityNotifier = ref.read(securityProvider.notifier);
 
-    final userState = ref.watch(userProvider);
+    final userState = ref.watch(currentUserProvider);
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
@@ -43,7 +39,8 @@ class SettingsView extends ConsumerWidget {
         foregroundColor: theme.colorScheme.onSurface,
       ),
       body: RefreshIndicator(
-        onRefresh: () => ref.read(userProvider.notifier).syncPendingUser(),
+        onRefresh: () =>
+            ref.read(currentUserProvider.notifier).syncPendingData(),
         child: appSettings.when(
           data: (settings) {
             dev.log(
@@ -308,18 +305,22 @@ class SettingsView extends ConsumerWidget {
           ),
           ElevatedButton(
             onPressed: () async {
+              await ref.read(currentUserProvider.notifier).clearUser();
+
               await LocalCacheManager.deleteAllCacheData();
 
-              ref.invalidate(userProvider);
-              ref.invalidate(ledgerProvider);
-              ref.invalidate(businessProvider);
-              ref.invalidate(saleProvider);
-              ref.invalidate(productProvider);
-              ref.invalidate(expenseProvider);
-              ref.invalidate(appSettingsProvider);
+              // ref.invalidate(currentUserProvider);
+              // ref.invalidate(ledgerProvider);
+              // ref.invalidate(businessProvider);
+              // ref.invalidate(saleProvider);
+              // ref.invalidate(productProvider);
+              // ref.invalidate(expenseProvider);
+              // ref.invalidate(appSettingsProvider);
 
               await ref.read(authControllerProvider.notifier).logout();
               if (context.mounted) {
+                ref.container.refresh(authControllerProvider);
+
                 Navigator.pushAndRemoveUntil(
                   context,
                   MaterialPageRoute(builder: (context) => const SignInView()),

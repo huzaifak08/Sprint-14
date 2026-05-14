@@ -107,7 +107,7 @@ class _ExpenseViewState extends ConsumerState<ExpenseView> {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: theme.colorScheme.primary.withOpacity(0.3),
+            color: theme.colorScheme.primary.withValues(alpha: 0.3),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -119,7 +119,7 @@ class _ExpenseViewState extends ConsumerState<ExpenseView> {
           Text(
             DateFormat('EEEE, d MMMM').format(selectedDate).toUpperCase(),
             style: TextStyle(
-              color: theme.colorScheme.onPrimary.withOpacity(0.7),
+              color: theme.colorScheme.onPrimary.withValues(alpha: 0.7),
               fontSize: 10,
               fontWeight: FontWeight.bold,
               letterSpacing: 1,
@@ -147,7 +147,7 @@ class _ExpenseViewState extends ConsumerState<ExpenseView> {
           Icon(
             Icons.auto_awesome_rounded,
             size: 50,
-            color: theme.colorScheme.primary.withOpacity(0.2),
+            color: theme.colorScheme.primary.withValues(alpha: 0.2),
           ),
           const SizedBox(height: 12),
           const Text(

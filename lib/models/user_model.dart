@@ -7,6 +7,7 @@ class UserModel {
   final String email;
   final String password;
   final String? profilePic;
+  final List<String> deviceTokens;
   final DateTime createdAt;
 
   // 🔐 Verification Flag
@@ -22,8 +23,9 @@ class UserModel {
     required this.email,
     required this.password,
     this.profilePic,
+    required this.deviceTokens,
     required this.createdAt,
-    required this.isEmailVerified, // New required field
+    required this.isEmailVerified,
     required this.isSynced,
     this.lastSyncAttempt,
   });
@@ -35,6 +37,7 @@ class UserModel {
     String? email,
     String? password,
     String? profilePic,
+    List<String>? deviceTokens,
     DateTime? createdAt,
     bool? isEmailVerified,
     bool? isSynced,
@@ -46,6 +49,7 @@ class UserModel {
       email: email ?? this.email,
       password: password ?? this.password,
       profilePic: profilePic ?? this.profilePic,
+      deviceTokens: deviceTokens ?? this.deviceTokens,
       createdAt: createdAt ?? this.createdAt,
       isEmailVerified: isEmailVerified ?? this.isEmailVerified,
       isSynced: isSynced ?? this.isSynced,
@@ -61,6 +65,7 @@ class UserModel {
       'email': email,
       'password': password,
       'profilePic': profilePic,
+      'deviceTokens': deviceTokens,
       'isEmailVerified': isEmailVerified, // Save status to cloud
       'createdAt': Timestamp.fromDate(createdAt),
     };
@@ -73,8 +78,11 @@ class UserModel {
       email: map['email'] ?? '',
       password: map['password'] ?? '',
       profilePic: map['profilePic'] as String?,
-      isEmailVerified:
-          map['isEmailVerified'] ?? false, // Load status from cloud
+      // 🔥 The Fix: Safely convert dynamic list to String list
+      deviceTokens: map['deviceTokens'] != null
+          ? List<String>.from(map['deviceTokens'])
+          : [],
+      isEmailVerified: map['isEmailVerified'] ?? false,
       createdAt: map['createdAt'] is Timestamp
           ? (map['createdAt'] as Timestamp).toDate()
           : DateTime.now(),
@@ -91,6 +99,7 @@ class UserModel {
       'email': email,
       'password': password,
       'profilePic': profilePic,
+      'deviceTokens': json.encode(deviceTokens),
       'isEmailVerified': isEmailVerified ? 1 : 0, // SQLite friendly
       'createdAt': createdAt.toIso8601String(),
       'isSynced': isSynced ? 1 : 0,
@@ -105,6 +114,9 @@ class UserModel {
       email: json['email'] ?? '',
       password: json['password'] ?? '',
       profilePic: json['profilePic'] as String?,
+      deviceTokens: json['deviceTokens'] != null
+          ? List<String>.from(jsonDecode(json['deviceTokens']))
+          : [],
       isEmailVerified: (json['isEmailVerified'] ?? 0) == 1,
       createdAt: DateTime.parse(json['createdAt']),
       isSynced: (json['isSynced'] ?? 0) == 1,
@@ -130,6 +142,7 @@ class UserModel {
         other.email == email &&
         other.password == password &&
         other.profilePic == profilePic &&
+        other.deviceTokens == deviceTokens &&
         other.createdAt == createdAt &&
         other.isEmailVerified == isEmailVerified &&
         other.isSynced == isSynced &&
@@ -143,6 +156,7 @@ class UserModel {
         email.hashCode ^
         password.hashCode ^
         profilePic.hashCode ^
+        deviceTokens.hashCode ^
         createdAt.hashCode ^
         isEmailVerified.hashCode ^
         isSynced.hashCode ^

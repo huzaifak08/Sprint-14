@@ -51,6 +51,7 @@ class AuthService {
           name: name,
           email: email,
           password: password,
+          deviceTokens: [],
           createdAt: DateTime.now(),
           isEmailVerified: false,
           isSynced: true,

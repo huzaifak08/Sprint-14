@@ -5,7 +5,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:sprint_14/cache/tables/business_table.dart';
 import 'package:sprint_14/models/business_model.dart';
 import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
-import 'package:sprint_14/providers/user_provider/user_provider.dart';
+import 'package:sprint_14/providers/current_user_provider/current_user_provider.dart';
 import 'package:sprint_14/services/business_service.dart';
 import 'dart:developer' as dev;
 
@@ -18,7 +18,7 @@ class BusinessNotifier extends _$BusinessNotifier {
   @override
   Future<List<BusinessModel>> build() async {
     // Watch user state to auto-refresh on logout/login
-    final user = ref.watch(userProvider).value;
+    final user = ref.watch(currentUserProvider).value;
     if (user == null) return [];
 
     // 1. Load from Local Cache immediately
@@ -169,7 +169,7 @@ class BusinessNotifier extends _$BusinessNotifier {
 
   /// --- MANUAL REFRESH ---
   Future<void> forceRefresh() async {
-    final user = ref.read(userProvider).value;
+    final user = ref.read(currentUserProvider).value;
     if (user == null) return;
     await _fetchAndSyncFromCloud(user.uid);
   }

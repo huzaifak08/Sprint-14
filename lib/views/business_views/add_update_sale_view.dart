@@ -393,7 +393,9 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+          color: theme.colorScheme.surfaceContainerHighest.withValues(
+            alpha: 0.3,
+          ),
           borderRadius: BorderRadius.circular(16),
         ),
         child: Row(
@@ -420,7 +422,7 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
+          border: Border.all(color: theme.dividerColor.withValues(alpha: 0.1)),
         ),
         child: const Center(
           child: Text(
@@ -442,10 +444,10 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
           margin: const EdgeInsets.only(bottom: 14),
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            color: theme.colorScheme.primary.withOpacity(0.05),
+            color: theme.colorScheme.primary.withValues(alpha: 0.05),
             borderRadius: BorderRadius.circular(22),
             border: Border.all(
-              color: theme.colorScheme.primary.withOpacity(0.06),
+              color: theme.colorScheme.primary.withValues(alpha: 0.06),
             ),
           ),
           child: Column(
@@ -474,7 +476,7 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
                     child: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Colors.red.withOpacity(0.08),
+                        color: Colors.red.withValues(alpha: 0.08),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
@@ -554,8 +556,8 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
                       max: 20,
                       divisions: 79,
                       activeColor: theme.colorScheme.primary,
-                      inactiveColor: theme.colorScheme.primary.withOpacity(
-                        0.15,
+                      inactiveColor: theme.colorScheme.primary.withValues(
+                        alpha: 0.15,
                       ),
                       onChanged: (v) {
                         HapticFeedback.selectionClick();
@@ -597,7 +599,7 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.2),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(18),
       ),
       child: Column(
@@ -648,9 +650,9 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.2),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
+        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.1)),
       ),
       child: Column(
         children: [
@@ -840,12 +842,14 @@ class _ProductDropdownState extends State<_ProductDropdown> {
     );
 
     return DropdownButtonFormField<ProductModel>(
-      value: null,
+      initialValue: null,
       isExpanded: true,
       hint: const Text("Tap to add item...", style: TextStyle(fontSize: 13)),
       decoration: InputDecoration(
         filled: true,
-        fillColor: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+        fillColor: theme.colorScheme.surfaceContainerHighest.withValues(
+          alpha: 0.3,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide.none,

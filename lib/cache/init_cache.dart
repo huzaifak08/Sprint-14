@@ -28,7 +28,7 @@ class LocalCacheManager {
 
     return openDatabase(
       path,
-      version: 10, // Increment version number when schema changes
+      version: 14, // Increment version number when schema changes
       onCreate: (db, version) async {
         // await ProjectTable.createTable(db);
         await LedgerTable.createTable(db);
@@ -36,96 +36,36 @@ class LocalCacheManager {
         await BusinessTable.createTable(db);
         await ProductTable.createTable(db);
         await SaleTable.createTable(db);
+        await ExpenseTable.createTable(db);
         await SettingsTable.createTable(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
-        if (oldVersion < 4) {
-          try {
-            await db.execute(
-              "ALTER TABLE products ADD COLUMN currentStock REAL NOT NULL DEFAULT 0.0",
-            );
-            dev.log(
-              "Database Upgraded: Added currentStock to products table",
-              name: "init Cache",
-            );
-          } catch (e) {
-            dev.log("Migration Error: $e", name: "init Cache");
-          }
-        }
-
-        if (oldVersion < 5) {
-          try {
-            // Migrating Sales Table for Multi-Product support
-            // We rename the old columns and add the new plural ones
-            await db.execute(
-              "ALTER TABLE sales RENAME COLUMN productId TO productIds",
-            );
-            await db.execute(
-              "ALTER TABLE sales RENAME COLUMN productTitle TO productTitles",
-            );
-            dev.log(
-              "Database Upgraded to v5: Sales table migrated to multi-product schema",
-            );
-          } catch (e) {
-            dev.log("Migration Error v5: $e. Recreating table...");
-            // Fallback: Recreate table if rename fails
-            await db.execute("DROP TABLE IF EXISTS sales");
-            await SaleTable.createTable(db);
-          }
-        }
-
-        if (oldVersion < 6) {
-          try {
-            await db.execute(
-              "ALTER TABLE sales ADD COLUMN measurement REAL NOT NULL DEFAULT 1.0",
-            );
-            dev.log(
-              "Database Upgraded to v6: Added measurement column to sales table",
-            );
-          } catch (e) {
-            dev.log("Migration Error v6: $e");
-          }
-        }
-
-        if (oldVersion < 7) {
-          try {
-            await db.execute("ALTER TABLE businesses ADD COLUMN logoPath TEXT");
-            await db.execute(
-              "ALTER TABLE businesses ADD COLUMN participantIds TEXT",
-            );
-            dev.log(
-              "Database Upgraded to v7: Added logo and participants to businesses",
-            );
-          } catch (e) {
-            dev.log("Migration Error v7: $e");
-          }
-        }
-
-        if (oldVersion < 8) {
-          try {
-            await db.execute("ALTER TABLE users ADD COLUMN profilePic TEXT");
-            dev.log("Database Upgraded to v8: Added profilePic to users table");
-          } catch (e) {
-            dev.log("Migration Error v8: $e");
-          }
-        }
-
-        if (oldVersion < 10) {
-          await ExpenseTable.createTable(db);
-          dev.log("Database Upgraded to v9: Added Expense Table");
-        }
-
-        try {
-          // 🔥 This adds the missing column to your existing 'users' table
-          await db.execute(
-            "ALTER TABLE users ADD COLUMN createdAt TEXT NOT NULL DEFAULT ''",
-          );
+        if (oldVersion < 14) {
           dev.log(
-            "Database Upgraded to v10: Added createdAt to users table",
-            name: "init Cache",
+            "Migration started from v$oldVersion to v$newVersion. Flushing cache...",
           );
-        } catch (e) {
-          dev.log("Migration Error v9: $e", name: "init Cache");
+
+          // 1. Get all table names existing in the DB
+          final tables = await db.rawQuery(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';",
+          );
+
+          // 2. Drop every table to clear the slate
+          for (var table in tables) {
+            final tableName = table['name'].toString();
+            await db.execute("DROP TABLE IF EXISTS $tableName");
+          }
+
+          // 3. Re-run onCreate logic to build all tables with the NEW schema
+          await LedgerTable.createTable(db);
+          await UserTable.createTable(db);
+          await BusinessTable.createTable(db);
+          await ProductTable.createTable(db);
+          await SaleTable.createTable(db);
+          await ExpenseTable.createTable(db);
+          await SettingsTable.createTable(db);
+
+          dev.log("Cache flushed and tables rebuilt successfully.");
         }
 
         // New Changes Here:

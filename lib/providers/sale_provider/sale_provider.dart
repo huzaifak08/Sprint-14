@@ -2,7 +2,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:sprint_14/cache/tables/sale_table.dart';
 import 'package:sprint_14/models/sale_model.dart';
-import 'package:sprint_14/providers/user_provider/user_provider.dart';
+import 'package:sprint_14/providers/current_user_provider/current_user_provider.dart';
 import 'package:sprint_14/services/sale_service.dart';
 import 'dart:developer' as dev;
 
@@ -13,7 +13,7 @@ class SaleNotifier extends _$SaleNotifier {
   @override
   FutureOr<List<SaleModel>> build(String businessId) async {
     // Watches the user to reset state on logout/login
-    final userState = ref.watch(userProvider);
+    final userState = ref.watch(currentUserProvider);
     if (userState.value == null) return [];
 
     // Phase 1: Load from cache immediately during initialization
@@ -44,7 +44,7 @@ class SaleNotifier extends _$SaleNotifier {
 
   /// Internal helper to sync cloud data without interrupting the user
   Future<void> _performSilentCloudSync(String businessId) async {
-    final user = ref.read(userProvider).value;
+    final user = ref.read(currentUserProvider).value;
     if (user == null) return;
 
     try {
@@ -143,7 +143,7 @@ class SaleNotifier extends _$SaleNotifier {
 
   /// 5. Background Sync Engine
   Future<void> syncPending(String businessId) async {
-    final user = ref.read(userProvider).value;
+    final user = ref.read(currentUserProvider).value;
     final connectivity = await Connectivity().checkConnectivity();
 
     if (user == null || connectivity.contains(ConnectivityResult.none)) return;

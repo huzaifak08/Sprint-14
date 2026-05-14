@@ -1,4 +1,5 @@
 import 'package:sqflite/sqflite.dart';
+import 'package:sprint_14/cache/init_cache.dart'; // 🔥 Import your manager
 import 'package:sprint_14/models/expense_model.dart';
 import 'dart:developer' as dev;
 
@@ -6,6 +7,7 @@ class ExpenseTable {
   static const String tableName = 'expenses';
 
   /// --- CREATE TABLE ---
+  /// Called by LocalCacheManager during onCreate or onUpgrade
   static Future<void> createTable(Database db) async {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS $tableName (
@@ -26,7 +28,7 @@ class ExpenseTable {
 
   /// --- SAVE / UPDATE SINGLE EXPENSE ---
   static Future<void> saveSingleExpense(ExpenseModel expense) async {
-    final db = await openDatabase('sprint_14.db'); // Ensure path consistency
+    final db = await LocalCacheManager.getDatabase(); // 🔥 Corrected
     await db.insert(
       tableName,
       expense.toJsonDb(),
@@ -38,7 +40,7 @@ class ExpenseTable {
   static Future<void> saveAllFetchedExpenses(
     List<ExpenseModel> expenses,
   ) async {
-    final db = await openDatabase('sprint_14.db');
+    final db = await LocalCacheManager.getDatabase(); // 🔥 Corrected
     final batch = db.batch();
     for (var e in expenses) {
       batch.insert(
@@ -51,11 +53,10 @@ class ExpenseTable {
   }
 
   /// --- GET ALL EXPENSES FOR A BUSINESS ---
-  /// Filters out soft-deleted items automatically
   static Future<List<ExpenseModel>> getAllExpensesFromCache(
     String businessId,
   ) async {
-    final db = await openDatabase('sprint_14.db');
+    final db = await LocalCacheManager.getDatabase(); // 🔥 Corrected
     final List<Map<String, dynamic>> maps = await db.query(
       tableName,
       where: 'businessId = ? AND isDeleted = 0',
@@ -67,9 +68,8 @@ class ExpenseTable {
   }
 
   /// --- GET UNSYNCED EXPENSES ---
-  /// Used by your syncPending() provider logic
   static Future<List<ExpenseModel>> getUnsyncedExpenses() async {
-    final db = await openDatabase('sprint_14.db');
+    final db = await LocalCacheManager.getDatabase(); // 🔥 Corrected
     final List<Map<String, dynamic>> maps = await db.query(
       tableName,
       where: 'isSynced = 0',
@@ -79,15 +79,14 @@ class ExpenseTable {
   }
 
   /// --- HARD DELETE ---
-  /// Called only after successful cloud deletion sync
   static Future<void> hardDelete(String id) async {
-    final db = await openDatabase('sprint_14.db');
+    final db = await LocalCacheManager.getDatabase(); // 🔥 Corrected
     await db.delete(tableName, where: 'id = ?', whereArgs: [id]);
   }
 
   /// --- CLEAR TABLE ---
   static Future<void> clearTable() async {
-    final db = await openDatabase('sprint_14.db');
+    final db = await LocalCacheManager.getDatabase(); // 🔥 Corrected
     await db.delete(tableName);
   }
 }

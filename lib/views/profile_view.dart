@@ -6,7 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:sprint_14/components/app_network_image.dart';
 import 'package:sprint_14/models/user_model.dart';
 import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
-import 'package:sprint_14/providers/user_provider/user_provider.dart';
+import 'package:sprint_14/providers/current_user_provider/current_user_provider.dart';
 
 class ProfileView extends ConsumerStatefulWidget {
   const ProfileView({super.key});
@@ -23,7 +23,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
   void initState() {
     super.initState();
     // Initialize controller with current name from provider
-    final user = ref.read(userProvider).value;
+    final user = ref.read(currentUserProvider).value;
     _nameController = TextEditingController(text: user?.name ?? "");
   }
 
@@ -42,8 +42,8 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
 
     if (pickedFile != null) {
       await ref
-          .read(userProvider.notifier)
-          .updateProfile(user, imageFile: File(pickedFile.path));
+          .read(currentUserProvider.notifier)
+          .updateProfile(updatedUser: user, imageFile: File(pickedFile.path));
     }
   }
 
@@ -52,7 +52,9 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
 
     final updatedUser = user.copyWith(name: _nameController.text.trim());
 
-    await ref.read(userProvider.notifier).updateProfile(updatedUser);
+    await ref
+        .read(currentUserProvider.notifier)
+        .updateProfile(updatedUser: updatedUser);
 
     setState(() => _isEditing = false);
 
@@ -66,7 +68,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final userState = ref.watch(userProvider);
+    final userState = ref.watch(currentUserProvider);
 
     return Scaffold(
       appBar: AppBar(

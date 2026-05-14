@@ -19,7 +19,7 @@ class ExpenseTile extends ConsumerWidget {
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(15),
         border: Border.all(
-          color: theme.colorScheme.outlineVariant.withOpacity(0.5),
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
         ),
       ),
       child: Material(
@@ -36,7 +36,9 @@ class ExpenseTile extends ConsumerWidget {
               children: [
                 CircleAvatar(
                   radius: 18,
-                  backgroundColor: theme.colorScheme.primary.withOpacity(0.08),
+                  backgroundColor: theme.colorScheme.primary.withValues(
+                    alpha: 0.08,
+                  ),
                   child: Icon(
                     _getIcon(expense.category),
                     size: 16,
@@ -74,7 +76,7 @@ class ExpenseTile extends ConsumerWidget {
                                 : Icons.sync_rounded,
                             size: 12,
                             color: expense.isSynced
-                                ? Colors.green.withOpacity(0.7)
+                                ? Colors.green.withValues(alpha: 0.7)
                                 : theme
                                       .colorScheme
                                       .tertiary, // Orange from your theme

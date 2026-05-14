@@ -2,7 +2,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:sprint_14/cache/tables/product_table.dart';
 import 'package:sprint_14/models/product_model.dart';
-import 'package:sprint_14/providers/user_provider/user_provider.dart';
+import 'package:sprint_14/providers/current_user_provider/current_user_provider.dart';
 import 'package:sprint_14/services/product_service.dart';
 import 'dart:developer' as dev;
 
@@ -13,7 +13,7 @@ class ProductNotifier extends _$ProductNotifier {
   @override
   FutureOr<List<ProductModel>> build(String businessId) async {
     // 1. Watch user state to clear data on logout
-    final userState = ref.watch(userProvider);
+    final userState = ref.watch(currentUserProvider);
     if (userState.value == null) return [];
 
     // 2. Phase 1: Instant Cache Load (Source of Truth for Offline)
@@ -41,7 +41,7 @@ class ProductNotifier extends _$ProductNotifier {
 
   /// Internal helper to sync cloud data without interrupting the user
   Future<void> _performSilentCloudSync(String businessId) async {
-    final user = ref.read(userProvider).value;
+    final user = ref.read(currentUserProvider).value;
     if (user == null) return;
 
     try {
@@ -128,7 +128,7 @@ class ProductNotifier extends _$ProductNotifier {
 
   /// 5. Push Local Changes to Cloud
   Future<void> syncPending(String businessId) async {
-    final user = ref.read(userProvider).value;
+    final user = ref.read(currentUserProvider).value;
     final connectivity = await Connectivity().checkConnectivity();
 
     if (user == null || connectivity.contains(ConnectivityResult.none)) return;

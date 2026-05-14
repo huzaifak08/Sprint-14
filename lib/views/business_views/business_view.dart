@@ -54,7 +54,7 @@ class BusinessView extends ConsumerWidget {
           Icon(
             Icons.storefront_outlined,
             size: 80,
-            color: theme.colorScheme.primary.withOpacity(0.2),
+            color: theme.colorScheme.primary.withValues(alpha: 0.2),
           ),
           const SizedBox(height: 16),
           const Text(
@@ -100,7 +100,7 @@ class _BusinessCard extends ConsumerWidget {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -265,7 +265,9 @@ class _BusinessFormSheetState extends ConsumerState<_BusinessFormSheet> {
             onTap: _pickImage,
             child: CircleAvatar(
               radius: 50,
-              backgroundColor: theme.colorScheme.primary.withOpacity(0.05),
+              backgroundColor: theme.colorScheme.primary.withValues(
+                alpha: 0.05,
+              ),
               backgroundImage: _logo != null
                   ? FileImage(_logo!)
                   : (_remoteLogo != null && _remoteLogo!.startsWith('http')
@@ -289,8 +291,8 @@ class _BusinessFormSheetState extends ConsumerState<_BusinessFormSheet> {
                 borderRadius: BorderRadius.circular(15),
               ),
               filled: true,
-              fillColor: theme.colorScheme.surfaceContainerHighest.withOpacity(
-                0.3,
+              fillColor: theme.colorScheme.surfaceContainerHighest.withValues(
+                alpha: 0.3,
               ),
             ),
           ),

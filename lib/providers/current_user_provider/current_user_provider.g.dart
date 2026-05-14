@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
-part of 'user_provider.dart';
+part of 'current_user_provider.dart';
 
 // **************************************************************************
 // RiverpodGenerator
@@ -9,33 +9,34 @@ part of 'user_provider.dart';
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
 
-@ProviderFor(UserNotifier)
-final userProvider = UserNotifierProvider._();
+@ProviderFor(CurrentUserNotifier)
+final currentUserProvider = CurrentUserNotifierProvider._();
 
-final class UserNotifierProvider
-    extends $AsyncNotifierProvider<UserNotifier, UserModel?> {
-  UserNotifierProvider._()
+final class CurrentUserNotifierProvider
+    extends $AsyncNotifierProvider<CurrentUserNotifier, UserModel?> {
+  CurrentUserNotifierProvider._()
     : super(
         from: null,
         argument: null,
         retry: null,
-        name: r'userProvider',
+        name: r'currentUserProvider',
         isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
 
   @override
-  String debugGetCreateSourceHash() => _$userNotifierHash();
+  String debugGetCreateSourceHash() => _$currentUserNotifierHash();
 
   @$internal
   @override
-  UserNotifier create() => UserNotifier();
+  CurrentUserNotifier create() => CurrentUserNotifier();
 }
 
-String _$userNotifierHash() => r'03a7bfd2fed84eb0b7434d1f353dd9edce5d0fea';
+String _$currentUserNotifierHash() =>
+    r'65987373d0307c684ba479406001e80cacf3d902';
 
-abstract class _$UserNotifier extends $AsyncNotifier<UserModel?> {
+abstract class _$CurrentUserNotifier extends $AsyncNotifier<UserModel?> {
   FutureOr<UserModel?> build();
   @$mustCallSuper
   @override

@@ -26,11 +26,39 @@ class UserService {
       if (doc.exists && doc.data() != null) {
         return UserModel.fromMap(doc.data()!);
       }
-      dev.log("User data null found");
+      dev.log("User data null found", name: "User Service");
       return null;
     } catch (e) {
-      dev.log("Failed to fetch user data: $e");
+      dev.log("Failed to fetch user data: $e", name: "User Service");
       throw Exception("Failed to fetch user data: $e");
+    }
+  }
+
+  /// Updates the device token list for multi-device notification support
+  Future<void> updateDeviceToken({
+    required String uid,
+    required String token,
+    bool isAdding = true,
+  }) async {
+    try {
+      final docRef = _firestore.collection(usersCollection).doc(uid);
+
+      if (isAdding) {
+        // 🔥 arrayUnion adds the token only if it does not already exist in the list
+        await docRef.update({
+          'deviceTokens': FieldValue.arrayUnion([token]),
+        });
+        dev.log("Device token added/verified for user: $uid");
+      } else {
+        // 🔥 arrayRemove removes the specific token (useful for logout)
+        await docRef.update({
+          'deviceTokens': FieldValue.arrayRemove([token]),
+        });
+        dev.log("Device token removed for user: $uid");
+      }
+    } catch (e) {
+      dev.log("Failed to update device token: $e");
+      throw Exception("Failed to update device token: $e");
     }
   }
 }

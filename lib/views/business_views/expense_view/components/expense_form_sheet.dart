@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sprint_14/helpers/app_data.dart';
 import 'package:sprint_14/models/expense_model.dart';
 import 'package:sprint_14/providers/expense_provider/expense_provider.dart';
-import 'package:sprint_14/providers/user_provider/user_provider.dart';
+import 'package:sprint_14/providers/current_user_provider/current_user_provider.dart';
 
 class ExpenseFormSheet extends ConsumerStatefulWidget {
   final String businessId;
@@ -51,7 +51,7 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final user = ref.read(userProvider).value;
+    final user = ref.read(currentUserProvider).value;
 
     return Container(
       decoration: BoxDecoration(
@@ -96,7 +96,7 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
                         radius: 25,
                         backgroundColor: isSelected
                             ? theme.colorScheme.primary
-                            : theme.colorScheme.primary.withOpacity(0.1),
+                            : theme.colorScheme.primary.withValues(alpha: 0.1),
                         child: Icon(
                           cat['icon'],
                           size: 18,
@@ -131,7 +131,7 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
                   borderRadius: BorderRadius.circular(15),
                 ),
                 filled: true,
-                fillColor: theme.colorScheme.primary.withOpacity(0.05),
+                fillColor: theme.colorScheme.primary.withValues(alpha: 0.05),
               ),
             ),
             const SizedBox(height: 16),
@@ -146,7 +146,7 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
                 borderRadius: BorderRadius.circular(15),
               ),
               filled: true,
-              fillColor: theme.colorScheme.primary.withOpacity(0.05),
+              fillColor: theme.colorScheme.primary.withValues(alpha: 0.05),
             ),
           ),
           const SizedBox(height: 24),

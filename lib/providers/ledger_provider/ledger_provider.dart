@@ -4,7 +4,7 @@ import 'package:sprint_14/cache/tables/ledger_table.dart';
 import 'dart:developer' as dev;
 
 import 'package:sprint_14/models/ledger_model.dart';
-import 'package:sprint_14/providers/user_provider/user_provider.dart';
+import 'package:sprint_14/providers/current_user_provider/current_user_provider.dart';
 import 'package:sprint_14/services/ledger_service.dart';
 
 part 'ledger_provider.g.dart';
@@ -12,13 +12,13 @@ part 'ledger_provider.g.dart';
 @Riverpod(keepAlive: true)
 class LedgerNotifier extends _$LedgerNotifier {
   // 🔥 Helper to get UID safely from the current state
-  String? get _currentUid => ref.read(userProvider).value?.uid;
+  String? get _currentUid => ref.read(currentUserProvider).value?.uid;
 
   @override
   List<LedgerModel> build() {
     // 1️⃣ Watch the user state.
     // This makes the Ledger list react automatically to login/logout.
-    final userState = ref.watch(userProvider);
+    final userState = ref.watch(currentUserProvider);
 
     userState.whenData((user) {
       if (user != null) {
