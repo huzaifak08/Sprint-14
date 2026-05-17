@@ -30,21 +30,37 @@ class BusinessNotifier extends _$BusinessNotifier {
     return cache;
   }
 
-  /// --- CLOUD LOAD & MERGE ---
+  /// --- CLOUD LOAD PARTIALLY SCOPED MAPS & MERGE ---
   Future<void> _fetchAndSyncFromCloud(String uid) async {
     try {
       final service = BusinessService(uid: uid);
-      final cloud = await service.getAllBusinesses();
-      final currentList = state.value ?? [];
 
+      // 🔥 STEP A: Ask the service for the business IDs this user belongs to
+      final List<String> targetedBusinessIds = await service
+          .getParticipantBusinessIds();
+
+      if (targetedBusinessIds.isEmpty) {
+        dev.log(
+          "No active workspace links found for user: $uid",
+          name: "BusinessProvider",
+        );
+        await BusinessTable.deleteAllBusinesses();
+        state = const AsyncData([]);
+        return;
+      }
+
+      // 🔥 STEP B: Fetch the actual business profiles matching those IDs
+      final cloud = await service.getBusinessesByIds(targetedBusinessIds);
+
+      final currentList = state.value ?? [];
       final Map<String, BusinessModel> currentMap = {
         for (final b in currentList) b.id: b,
       };
+
       final List<BusinessModel> merged = [];
 
       for (final c in cloud) {
         final local = currentMap[c.id];
-        // If local has unsynced changes, prioritize local, otherwise take cloud
         if (local != null && !local.isSynced) {
           merged.add(local);
         } else {
@@ -52,13 +68,17 @@ class BusinessNotifier extends _$BusinessNotifier {
         }
       }
 
+      // 3. Update SQLite and Riverpod state
       await BusinessTable.saveAllFetchedBusinesses(merged);
       state = AsyncData(merged);
 
-      // Post-fetch sync for any pending local changes
+      // 4. Fire upstream data sync for pending local changes
       syncPending();
     } catch (e) {
-      dev.log("Cloud Fetch Error: $e", name: "BusinessProvider");
+      dev.log(
+        "Cloud Participant Workspace Fetch Error: $e",
+        name: "BusinessProvider",
+      );
     }
   }
 

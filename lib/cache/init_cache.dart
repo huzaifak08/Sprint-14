@@ -2,6 +2,7 @@ import 'dart:developer' as dev;
 import 'package:sprint_14/cache/tables/business_table.dart';
 import 'package:sprint_14/cache/tables/expense_table.dart';
 import 'package:sprint_14/cache/tables/ledger_table.dart';
+import 'package:sprint_14/cache/tables/participant_table.dart';
 import 'package:sprint_14/cache/tables/product_table.dart';
 import 'package:sprint_14/cache/tables/sale_table.dart';
 import 'package:sprint_14/cache/tables/settings_table.dart';
@@ -28,7 +29,7 @@ class LocalCacheManager {
 
     return openDatabase(
       path,
-      version: 14, // Increment version number when schema changes
+      version: 15, // Increment version number when schema changes
       onCreate: (db, version) async {
         // await ProjectTable.createTable(db);
         await LedgerTable.createTable(db);
@@ -37,6 +38,7 @@ class LocalCacheManager {
         await ProductTable.createTable(db);
         await SaleTable.createTable(db);
         await ExpenseTable.createTable(db);
+        await ParticipantTable.createTable(db);
         await SettingsTable.createTable(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -66,6 +68,11 @@ class LocalCacheManager {
           await SettingsTable.createTable(db);
 
           dev.log("Cache flushed and tables rebuilt successfully.");
+        }
+
+        if (oldVersion < 15) {
+          await ParticipantTable.createTable(db);
+          dev.log("v15- Particpant Table created");
         }
 
         // New Changes Here:

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:sprint_14/components/app_network_image.dart';
+import 'package:sprint_14/views/business_views/participants_management_view.dart';
 import 'package:uuid/uuid.dart';
 import 'package:sprint_14/models/business_model.dart';
 import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
@@ -176,6 +177,22 @@ class _BusinessCard extends ConsumerWidget {
                   isScrollControlled: true,
                   backgroundColor: Colors.transparent,
                   builder: (context) => _BusinessFormSheet(business: business),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.people),
+              title: const Text(
+                "Manage Participants",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        ParticipantsManagementView(businessId: business.id),
+                  ),
                 );
               },
             ),

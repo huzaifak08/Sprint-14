@@ -41,7 +41,7 @@ final class LedgerNotifierProvider
   }
 }
 
-String _$ledgerNotifierHash() => r'50377131d66fda9d3ec0f75c4ecf97ecb33256e4';
+String _$ledgerNotifierHash() => r'42d04dc8fb7bd8491dca23448987bb09f753bdb0';
 
 abstract class _$LedgerNotifier extends $Notifier<List<LedgerModel>> {
   List<LedgerModel> build();

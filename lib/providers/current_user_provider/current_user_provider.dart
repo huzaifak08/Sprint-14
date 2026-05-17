@@ -5,7 +5,7 @@ import 'package:sprint_14/models/user_model.dart';
 import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
 import 'package:sprint_14/services/storage_service.dart';
 import 'package:sprint_14/services/user_service.dart';
-import 'package:sprint_14/clients/notifications/notification_service.dart'; // 🔥 Added
+import 'package:sprint_14/clients/notifications/notification_service.dart';
 import 'dart:developer' as dev;
 
 part 'current_user_provider.g.dart';
@@ -16,8 +16,6 @@ class CurrentUserNotifier extends _$CurrentUserNotifier {
 
   @override
   FutureOr<UserModel?> build() async {
-    // 1. Watch Auth State
-    // When authController changes (login/logout), this build method re-runs automatically.
     final authState = ref.watch(authControllerProvider);
 
     return authState.when(
@@ -26,42 +24,45 @@ class CurrentUserNotifier extends _$CurrentUserNotifier {
         return _initUser(user.uid);
       },
       loading: () => null,
-      error: (_, _) => null,
+      error: (_, __) => null,
     );
   }
 
   /// --- INITIALIZATION & SYNC ---
-
   Future<UserModel?> _initUser(String uid) async {
-    // A. Try Local Cache first for instant UI loading
     final localUser = await UserTable.getUser(uid);
 
     if (localUser != null) {
-      dev.log("UserProvider: Cache Hit", name: "UserProvider");
-      // Trigger background sync to get latest cloud data (like new device tokens)
+      dev.log("CurrentUser: Cache Hit.", name: "CurrentUserProvider");
       _syncWithCloud(uid);
       return localUser;
     }
 
-    // B. Cache empty? Fetch from Cloud
-    dev.log("UserProvider: Cache Empty, Fetching Cloud", name: "UserProvider");
+    dev.log(
+      "CurrentUser: Cache Empty. Fetching Cloud.",
+      name: "CurrentUserProvider",
+    );
     return await _syncWithCloud(uid);
   }
 
   Future<UserModel?> _syncWithCloud(String uid) async {
     try {
-      final cloudUser = await _userService.getUserData(uid);
+      var cloudUser = await _userService.getUserData(uid);
       if (cloudUser != null) {
-        // 🔥 Multi-Device Token Check: Ensure this device's token is in the list
         final token = await NotificationService().getDeviceToken();
+
         if (token != null && !cloudUser.deviceTokens.contains(token)) {
           await _userService.updateDeviceToken(
             uid: uid,
             token: token,
             isAdding: true,
           );
-          // Re-fetch to get the model with the updated token list
-          return _syncWithCloud(uid);
+
+          // 🔥 FIX: Instead of calling _syncWithCloud recursively, append the token
+          // locally to minimize network roundtrips and eliminate infinite loops.
+          final updatedTokens = List<String>.from(cloudUser.deviceTokens)
+            ..add(token);
+          cloudUser = cloudUser.copyWith(deviceTokens: updatedTokens);
         }
 
         await UserTable.saveUser(cloudUser.copyWith(isSynced: true));
@@ -69,20 +70,18 @@ class CurrentUserNotifier extends _$CurrentUserNotifier {
         return cloudUser;
       }
     } catch (e) {
-      dev.log("Sync Error: $e", name: "UserProvider");
+      dev.log("Sync Error: $e", name: "CurrentUserProvider");
     }
     return null;
   }
 
   /// --- PROFILE ACTIONS ---
-
   Future<void> updateProfile({
     required UserModel updatedUser,
     File? imageFile,
   }) async {
     final previousState = state;
 
-    // 1. Optimistic Update (UI updates immediately)
     final localUpdate = updatedUser.copyWith(
       isSynced: false,
       profilePic: imageFile?.path ?? updatedUser.profilePic,
@@ -93,7 +92,6 @@ class CurrentUserNotifier extends _$CurrentUserNotifier {
     try {
       String? finalImageUrl = updatedUser.profilePic;
 
-      // 2. Upload Image if changed
       if (imageFile != null) {
         finalImageUrl = await StorageService().uploadProfilePic(
           updatedUser.uid,
@@ -101,24 +99,21 @@ class CurrentUserNotifier extends _$CurrentUserNotifier {
         );
       }
 
-      // 3. Push to Firestore
       final userToSync = localUpdate.copyWith(
         profilePic: finalImageUrl,
         isSynced: true,
       );
       await _userService.saveOrUpdateUser(userToSync);
 
-      // 4. Update Local DB & State
       await UserTable.saveUser(userToSync);
       state = AsyncData(userToSync);
     } catch (e) {
       dev.log("Update Failed: $e");
-      state = previousState; // Rollback on failure
+      state = previousState;
     }
   }
 
   /// --- MANUAL SYNC ---
-
   Future<void> syncPendingData() async {
     final user = state.value;
     if (user == null || user.isSynced) return;
@@ -134,7 +129,6 @@ class CurrentUserNotifier extends _$CurrentUserNotifier {
   }
 
   /// --- CLEANUP ---
-
   Future<void> clearUser() async {
     final uid = state.value?.uid;
     if (uid != null) {

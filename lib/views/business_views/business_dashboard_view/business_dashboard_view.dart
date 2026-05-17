@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sprint_14/providers/business_provider/business_provider.dart';
 import 'package:sprint_14/providers/expense_provider/expense_provider.dart';
+import 'package:sprint_14/providers/participant_provider/participant_provider.dart';
 import 'package:sprint_14/providers/product_provider/product_provider.dart';
 import 'package:sprint_14/providers/sale_provider/sale_provider.dart';
 import 'package:sprint_14/views/business_views/add_update_sale_view.dart';
@@ -41,6 +42,9 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView>
         ref
             .read(productProvider(widget.businessId).notifier)
             .syncPending(widget.businessId);
+        ref
+            .read(participantProvider(widget.businessId).notifier)
+            .syncPendingParticipants();
         ref
             .read(saleProvider(widget.businessId).notifier)
             .syncPending(widget.businessId);
