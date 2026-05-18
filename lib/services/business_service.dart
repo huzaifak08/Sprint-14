@@ -101,30 +101,46 @@ class BusinessService {
   Future<List<String>> getParticipantBusinessIds() async {
     try {
       dev.log(
-        "Fetching participant links for user: $uid",
+        "Fetching consolidated workspace intersections for user: $uid",
         name: "BusinessService",
       );
 
+      // 1. Query the participants collection (for roles like Salesman/Admin)
       final participantQuery = await _firestore
           .collection(participantsCollection)
           .where('userId', isEqualTo: uid)
           .where('isActive', isEqualTo: true)
           .get();
 
-      if (participantQuery.docs.isEmpty) return [];
+      // 2. Query the businesses collection directly (for the Owner role)
+      final ownedQuery = await _firestore
+          .collection(businessesCollection)
+          .where('ownerId', isEqualTo: uid)
+          .get();
 
-      // Extract and return just the raw businessId strings
-      return participantQuery.docs
-          .map((doc) => doc.data()['businessId'] as String)
-          .toList();
+      // Use a Set to naturally eliminate duplicate IDs
+      final Set<String> combinedBusinessIds = {};
+
+      // Extract IDs from participant links
+      for (var doc in participantQuery.docs) {
+        final id = doc.data()['businessId'] as String?;
+        if (id != null) combinedBusinessIds.add(id);
+      }
+
+      // Extract IDs from owned businesses
+      for (var doc in ownedQuery.docs) {
+        combinedBusinessIds.add(doc.id);
+      }
+
+      return combinedBusinessIds.toList();
     } on FirebaseException catch (e) {
       dev.log(
-        "Firebase Participant Query Error: ${e.message}",
+        "Firebase Participant/Owner Query Error: ${e.message}",
         name: "BusinessService",
       );
       throw Exception(e.message);
     } catch (e) {
-      dev.log("General Participant Query Error: $e", name: "BusinessService");
+      dev.log("General Workspace Query Error: $e", name: "BusinessService");
       throw Exception(e.toString());
     }
   }

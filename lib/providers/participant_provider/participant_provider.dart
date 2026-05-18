@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:sprint_14/cache/tables/participant_table.dart';
 import 'package:sprint_14/models/participant_model.dart';
+import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
 import 'package:sprint_14/services/participant_service.dart';
 import 'dart:developer' as dev;
 
@@ -235,4 +236,20 @@ class ParticipantNotifier extends _$ParticipantNotifier {
       }
     }
   }
+}
+
+@riverpod
+FutureOr<ParticipantModel?> currentParticipantRole(
+  Ref ref,
+  String businessId,
+) async {
+  // 1. Get the current logged-in user's UID
+  final user = ref.watch(authControllerProvider).value;
+  if (user == null || businessId.isEmpty) return null;
+
+  // 2. Query your SQLite cache instantly using the composite fields
+  return await ParticipantTable.getSpecificParticipant(
+    businessId: businessId,
+    userId: user.uid,
+  );
 }

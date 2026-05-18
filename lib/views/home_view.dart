@@ -11,7 +11,7 @@ import 'package:sprint_14/services/biometric_service.dart';
 import 'package:sprint_14/views/add_or_update_ledger_view.dart';
 import 'package:sprint_14/views/business_views/business_view.dart';
 import 'package:sprint_14/views/ledger_view/ledger_view.dart';
-import 'package:sprint_14/views/reminders_view.dart';
+import 'package:sprint_14/views/notifications_view.dart';
 import 'package:sprint_14/views/settings_view.dart';
 
 class HomeView extends ConsumerStatefulWidget {
@@ -276,7 +276,7 @@ class _HomeViewState extends ConsumerState<HomeView>
         child: IconButton(
           onPressed: () => Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const RemindersView()),
+            MaterialPageRoute(builder: (context) => const NotificationsView()),
           ),
           icon: const Icon(Icons.notifications, color: Colors.white),
         ),

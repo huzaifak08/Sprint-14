@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sprint_14/components/app_network_image.dart';
+import 'package:sprint_14/helpers/app_data.dart';
 import 'package:sprint_14/models/participant_model.dart';
+import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
+import 'package:sprint_14/providers/notification_provider/notification_provider.dart';
 import 'package:sprint_14/providers/participant_provider/participant_provider.dart';
 import 'package:sprint_14/providers/user_provider/user_provider.dart';
 
@@ -283,7 +286,7 @@ class _ParticipantsManagementViewState
                   ),
                   const SizedBox(height: 10),
                   DropdownButtonFormField<String>(
-                    value: selectedRole,
+                    initialValue: selectedRole,
                     decoration: InputDecoration(
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
@@ -407,14 +410,31 @@ class _ParticipantsManagementViewState
             child: const Text("Cancel"),
           ),
           TextButton(
-            onPressed: () {
-              Navigator.pop(context);
+            onPressed: () async {
+              final sender = await ref.read(authControllerProvider.future);
+
+              Navigator.pop(
+                AppData.shared.navigatorKey.currentContext ?? context,
+              );
               ref
                   .read(participantProvider(widget.businessId).notifier)
                   .updateStaffRole(
                     businessId: widget.businessId,
                     userId: participant.userId,
                     newRole: roleSelection,
+                  );
+
+              // Send Notification:
+              ref
+                  .read(notificationProvider.notifier)
+                  .sendDynamicNotification(
+                    targetUserId: participant.userId,
+                    businessId: widget.businessId,
+                    title: "Privileges Modified",
+                    body:
+                        "Your profile access level was changed to: ${roleSelection.toUpperCase()}.",
+                    actionType: "navigate",
+                    payload: {"route": "/dashboard", "senderId": sender?.uid},
                   );
             },
             child: const Text("Save Privileges"),

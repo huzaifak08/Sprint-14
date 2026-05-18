@@ -105,3 +105,82 @@ abstract class _$ParticipantNotifier
     element.handleCreate(ref, () => build(_$args));
   }
 }
+
+@ProviderFor(currentParticipantRole)
+final currentParticipantRoleProvider = CurrentParticipantRoleFamily._();
+
+final class CurrentParticipantRoleProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<ParticipantModel?>,
+          ParticipantModel?,
+          FutureOr<ParticipantModel?>
+        >
+    with
+        $FutureModifier<ParticipantModel?>,
+        $FutureProvider<ParticipantModel?> {
+  CurrentParticipantRoleProvider._({
+    required CurrentParticipantRoleFamily super.from,
+    required String super.argument,
+  }) : super(
+         retry: null,
+         name: r'currentParticipantRoleProvider',
+         isAutoDispose: true,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$currentParticipantRoleHash();
+
+  @override
+  String toString() {
+    return r'currentParticipantRoleProvider'
+        ''
+        '($argument)';
+  }
+
+  @$internal
+  @override
+  $FutureProviderElement<ParticipantModel?> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<ParticipantModel?> create(Ref ref) {
+    final argument = this.argument as String;
+    return currentParticipantRole(ref, argument);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is CurrentParticipantRoleProvider &&
+        other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$currentParticipantRoleHash() =>
+    r'8a28e5f135dd735c51908a00e98243ef0393a1c2';
+
+final class CurrentParticipantRoleFamily extends $Family
+    with $FunctionalFamilyOverride<FutureOr<ParticipantModel?>, String> {
+  CurrentParticipantRoleFamily._()
+    : super(
+        retry: null,
+        name: r'currentParticipantRoleProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: true,
+      );
+
+  CurrentParticipantRoleProvider call(String businessId) =>
+      CurrentParticipantRoleProvider._(argument: businessId, from: this);
+
+  @override
+  String toString() => r'currentParticipantRoleProvider';
+}

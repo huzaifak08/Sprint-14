@@ -50,7 +50,7 @@ final class UserNotifierProvider
   }
 }
 
-String _$userNotifierHash() => r'eaa104ce861480dc578670bbdd75f2b42b6af064';
+String _$userNotifierHash() => r'7a823dbd2e9f309773b93303ef2f85cdd09e9b9d';
 
 final class UserNotifierFamily extends $Family
     with
