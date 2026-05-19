@@ -97,3 +97,77 @@ abstract class _$UserNotifier extends $AsyncNotifier<UserModel?> {
     element.handleCreate(ref, () => build(_$args));
   }
 }
+
+@ProviderFor(userProfile)
+final userProfileProvider = UserProfileFamily._();
+
+final class UserProfileProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<UserModel?>,
+          UserModel?,
+          FutureOr<UserModel?>
+        >
+    with $FutureModifier<UserModel?>, $FutureProvider<UserModel?> {
+  UserProfileProvider._({
+    required UserProfileFamily super.from,
+    required String super.argument,
+  }) : super(
+         retry: null,
+         name: r'userProfileProvider',
+         isAutoDispose: true,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$userProfileHash();
+
+  @override
+  String toString() {
+    return r'userProfileProvider'
+        ''
+        '($argument)';
+  }
+
+  @$internal
+  @override
+  $FutureProviderElement<UserModel?> $createElement($ProviderPointer pointer) =>
+      $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<UserModel?> create(Ref ref) {
+    final argument = this.argument as String;
+    return userProfile(ref, argument);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is UserProfileProvider && other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$userProfileHash() => r'6e682d1f0f5a4316681fe6d57b77807cc7f906e7';
+
+final class UserProfileFamily extends $Family
+    with $FunctionalFamilyOverride<FutureOr<UserModel?>, String> {
+  UserProfileFamily._()
+    : super(
+        retry: null,
+        name: r'userProfileProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: true,
+      );
+
+  UserProfileProvider call(String id) =>
+      UserProfileProvider._(argument: id, from: this);
+
+  @override
+  String toString() => r'userProfileProvider';
+}

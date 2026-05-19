@@ -210,6 +210,9 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView>
   ) {
     final notifier = ref.read(dashboardUiProvider.notifier);
     final businessState = ref.watch(singleBusinessProvider(businessId));
+    final currentRole = ref.watch(
+      currentBusinessRoleProvider(widget.businessId),
+    );
 
     if (ui.isSearching) {
       return SliverAppBar(
@@ -249,17 +252,25 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView>
         ),
       ),
       actions: [
-        IconButton(
-          icon: const Icon(Icons.layers_outlined),
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) =>
-                    ManageProductsView(businessId: widget.businessId),
-              ),
-            );
+        currentRole.when(
+          data: (role) {
+            return role.isSalesman == true
+                ? SizedBox.shrink()
+                : IconButton(
+                    icon: const Icon(Icons.layers_outlined),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              ManageProductsView(businessId: widget.businessId),
+                        ),
+                      );
+                    },
+                  );
           },
+          error: (error, stackTrace) => SizedBox.shrink(),
+          loading: () => SizedBox.shrink(),
         ),
         IconButton(
           icon: Icon(

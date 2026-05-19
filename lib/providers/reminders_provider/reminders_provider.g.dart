@@ -44,7 +44,7 @@ final class RemindersNotifierProvider
   }
 }
 
-String _$remindersNotifierHash() => r'5daca1aae57fe57165fada26a5f0237c264e3c88';
+String _$remindersNotifierHash() => r'51d5a03da717a1ebee8ca2c7810c80c7e1477b56';
 
 abstract class _$RemindersNotifier
     extends $Notifier<List<PendingNotificationRequest>> {

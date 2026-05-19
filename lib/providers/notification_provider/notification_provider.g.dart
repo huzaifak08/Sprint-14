@@ -35,7 +35,7 @@ final class NotificationNotifierProvider
 }
 
 String _$notificationNotifierHash() =>
-    r'2236fc940c55389029ffcc726836b783d19db6b6';
+    r'167419d818ff4dd02722a6d065bb7d74a1211f95';
 
 abstract class _$NotificationNotifier
     extends $AsyncNotifier<List<NotificationModel>> {
@@ -64,20 +64,12 @@ abstract class _$NotificationNotifier
   }
 }
 
-/// 🔥 HIGH PERFORMANCE STANDALONE COUNTER PROVIDER FOR BADGES
-/// Avoids recalculating totals or triggering widget updates across main content list view frames
-
 @ProviderFor(notificationUnreadCount)
 final notificationUnreadCountProvider = NotificationUnreadCountProvider._();
-
-/// 🔥 HIGH PERFORMANCE STANDALONE COUNTER PROVIDER FOR BADGES
-/// Avoids recalculating totals or triggering widget updates across main content list view frames
 
 final class NotificationUnreadCountProvider
     extends $FunctionalProvider<int, int, int>
     with $Provider<int> {
-  /// 🔥 HIGH PERFORMANCE STANDALONE COUNTER PROVIDER FOR BADGES
-  /// Avoids recalculating totals or triggering widget updates across main content list view frames
   NotificationUnreadCountProvider._()
     : super(
         from: null,
@@ -112,4 +104,4 @@ final class NotificationUnreadCountProvider
 }
 
 String _$notificationUnreadCountHash() =>
-    r'20bde293d0b80a1985c910a8564eb281ef2994f9';
+    r'7a42fc8f1b6817ad60e741da79105254a763eeaa';

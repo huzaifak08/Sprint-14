@@ -93,52 +93,66 @@ class _BusinessCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final currentRole = ref.watch(currentBusinessRoleProvider(business.id));
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+    return currentRole.when(
+      data: (role) {
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: ListTile(
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => BusinessDashboardView(businessId: business.id),
+          child: Material(
+            color: Colors.transparent,
+            child: ListTile(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      BusinessDashboardView(businessId: business.id),
+                ),
+              ),
+              onLongPress: () =>
+                  role.isSalesman ? null : _showOptions(context, ref),
+              contentPadding: const EdgeInsets.all(16),
+              leading: AppNetworkImage(
+                path: business.logoPath,
+                size: 55,
+                isCircle: false,
+                borderRadius: 15,
+                fallbackLetter: business.name.isNotEmpty
+                    ? business.name[0]
+                    : 'B',
+              ),
+              title: Text(
+                business.name.toUpperCase(),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 14,
+                ),
+              ),
+              subtitle: Text(
+                "${business.type} • ${business.currency}",
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+              trailing: Icon(
+                Icons.chevron_right_rounded,
+                color: theme.colorScheme.primary,
+              ),
             ),
           ),
-          onLongPress: () => _showOptions(context, ref),
-          contentPadding: const EdgeInsets.all(16),
-          leading: AppNetworkImage(
-            path: business.logoPath,
-            size: 55,
-            isCircle: false,
-            borderRadius: 15,
-            fallbackLetter: business.name.isNotEmpty ? business.name[0] : 'B',
-          ),
-          title: Text(
-            business.name.toUpperCase(),
-            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
-          ),
-          subtitle: Text(
-            "${business.type} • ${business.currency}",
-            style: const TextStyle(fontSize: 12, color: Colors.grey),
-          ),
-          trailing: Icon(
-            Icons.chevron_right_rounded,
-            color: theme.colorScheme.primary,
-          ),
-        ),
-      ),
+        );
+      },
+      error: (error, stackTrace) => Text("ERROR"),
+      loading: () => Center(child: CircularProgressIndicator()),
     );
   }
 

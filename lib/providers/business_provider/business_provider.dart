@@ -6,6 +6,7 @@ import 'package:sprint_14/cache/tables/business_table.dart';
 import 'package:sprint_14/models/business_model.dart';
 import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
 import 'package:sprint_14/providers/current_user_provider/current_user_provider.dart';
+import 'package:sprint_14/providers/participant_provider/participant_provider.dart';
 import 'package:sprint_14/services/business_service.dart';
 import 'dart:developer' as dev;
 
@@ -204,4 +205,62 @@ Future<BusinessModel> singleBusiness(Ref ref, String businessId) async {
   );
 
   return buss;
+}
+
+/// Represents a completely open-ended user permission mapping profile.
+class UserBusinessPermissions {
+  final bool isOwner;
+  final String role; // Can be 'admin', 'salesman', 'manager', 'auditor', etc.
+
+  UserBusinessPermissions({required this.isOwner, required this.role});
+
+  bool get hasAdminPrivileges => isOwner || role == 'admin';
+  bool get isSalesman => !isOwner && role == 'salesman';
+}
+
+@riverpod
+Future<UserBusinessPermissions> currentBusinessRole(
+  Ref ref,
+  String businessId,
+) async {
+  final authUser = ref.watch(authControllerProvider).value;
+  if (authUser == null || businessId.isEmpty) {
+    dev.log("Auth User empty", name: "RoleProvider");
+    return UserBusinessPermissions(isOwner: false, role: 'none');
+  }
+
+  // 1. Check direct business ownership from the cache
+  try {
+    final business = await ref.watch(singleBusinessProvider(businessId).future);
+
+    if (business.ownerId == authUser.uid) {
+      dev.log(
+        "Current user is owner of ${business.name}",
+        name: "RoleProvider",
+      );
+      return UserBusinessPermissions(isOwner: true, role: 'owner');
+    } else {
+      final particiants = await ref.watch(
+        participantProvider(businessId).future,
+      );
+
+      var par = particiants.firstWhere(
+        (element) => element.userId == authUser.uid,
+      );
+
+      dev.log("User is ${par.role}", name: "RoleProvider");
+
+      return UserBusinessPermissions(
+        isOwner: false,
+        role: par.role.toLowerCase().trim(),
+      );
+    }
+  } catch (e) {
+    dev.log(
+      "Business data unavailable for ownership assessment: $e",
+      name: "RoleProvider",
+    );
+
+    return UserBusinessPermissions(isOwner: false, role: 'none');
+  }
 }

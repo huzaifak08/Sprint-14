@@ -1,6 +1,6 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:sprint_14/clients/notifications/notification_service.dart';
+import 'package:sprint_14/clients/notifications/notification_cloud_service.dart';
 part 'reminders_provider.g.dart';
 
 @Riverpod(keepAlive: true)
@@ -14,7 +14,8 @@ class RemindersNotifier extends _$RemindersNotifier {
 
   // Refreshes the state with the actual pending notifications from the OS
   Future<void> _loadReminders() async {
-    final reminders = await NotificationService().checkPendingNotifications();
+    final reminders = await NotificationCloudService()
+        .checkPendingNotifications();
     state = reminders;
   }
 
@@ -26,7 +27,7 @@ class RemindersNotifier extends _$RemindersNotifier {
     required DateTime dateTime,
     String? payload,
   }) async {
-    await NotificationService().scheduleNotification(
+    await NotificationCloudService().scheduleNotification(
       id: id,
       title: title,
       body: body,
@@ -39,7 +40,7 @@ class RemindersNotifier extends _$RemindersNotifier {
   }
 
   Future<void> cancelReminder({required int reminderId}) async {
-    await NotificationService().cancelProjectNotifications(id: reminderId);
+    await NotificationCloudService().cancelProjectNotifications(id: reminderId);
     _loadReminders();
   }
 }

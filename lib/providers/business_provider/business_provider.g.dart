@@ -128,3 +128,81 @@ final class SingleBusinessFamily extends $Family
   @override
   String toString() => r'singleBusinessProvider';
 }
+
+@ProviderFor(currentBusinessRole)
+final currentBusinessRoleProvider = CurrentBusinessRoleFamily._();
+
+final class CurrentBusinessRoleProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<UserBusinessPermissions>,
+          UserBusinessPermissions,
+          FutureOr<UserBusinessPermissions>
+        >
+    with
+        $FutureModifier<UserBusinessPermissions>,
+        $FutureProvider<UserBusinessPermissions> {
+  CurrentBusinessRoleProvider._({
+    required CurrentBusinessRoleFamily super.from,
+    required String super.argument,
+  }) : super(
+         retry: null,
+         name: r'currentBusinessRoleProvider',
+         isAutoDispose: true,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$currentBusinessRoleHash();
+
+  @override
+  String toString() {
+    return r'currentBusinessRoleProvider'
+        ''
+        '($argument)';
+  }
+
+  @$internal
+  @override
+  $FutureProviderElement<UserBusinessPermissions> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<UserBusinessPermissions> create(Ref ref) {
+    final argument = this.argument as String;
+    return currentBusinessRole(ref, argument);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is CurrentBusinessRoleProvider && other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$currentBusinessRoleHash() =>
+    r'dcb32cf98fe2b67090726c837202cc0f6b62b1d6';
+
+final class CurrentBusinessRoleFamily extends $Family
+    with $FunctionalFamilyOverride<FutureOr<UserBusinessPermissions>, String> {
+  CurrentBusinessRoleFamily._()
+    : super(
+        retry: null,
+        name: r'currentBusinessRoleProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: true,
+      );
+
+  CurrentBusinessRoleProvider call(String businessId) =>
+      CurrentBusinessRoleProvider._(argument: businessId, from: this);
+
+  @override
+  String toString() => r'currentBusinessRoleProvider';
+}

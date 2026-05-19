@@ -3,10 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sprint_14/components/app_network_image.dart';
 import 'package:sprint_14/helpers/app_data.dart';
 import 'package:sprint_14/models/participant_model.dart';
-import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
-import 'package:sprint_14/providers/notification_provider/notification_provider.dart';
+import 'package:sprint_14/models/user_model.dart';
+import 'package:sprint_14/providers/business_provider/business_provider.dart';
 import 'package:sprint_14/providers/participant_provider/participant_provider.dart';
 import 'package:sprint_14/providers/user_provider/user_provider.dart';
+import 'package:sprint_14/utils/save_send_notification.dart';
 
 class ParticipantsManagementView extends ConsumerStatefulWidget {
   final String businessId;
@@ -23,6 +24,15 @@ class _ParticipantsManagementViewState
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final participantsAsync = ref.watch(participantProvider(widget.businessId));
+
+    final businessAsync = ref.watch(singleBusinessProvider(widget.businessId));
+
+    // 3. 🔥 Read the ID out of the business data state to fetch the profile cleanly
+    final AsyncValue<UserModel?> ownerAsync = businessAsync.when(
+      data: (business) => ref.watch(userProfileProvider(business.ownerId)),
+      loading: () => const AsyncLoading<UserModel?>(),
+      error: (err, stack) => AsyncError<UserModel?>(err, stack),
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -49,7 +59,6 @@ class _ParticipantsManagementViewState
             return _buildEmptyState(theme);
           }
 
-          final ownersCount = staffList.where((p) => p.isOwner).length;
           final adminsCount = staffList.where((p) => p.isAdmin).length;
           final salesCount = staffList.where((p) => p.isSalesman).length;
 
@@ -61,13 +70,27 @@ class _ParticipantsManagementViewState
               padding: const EdgeInsets.symmetric(horizontal: 16),
               children: [
                 const SizedBox(height: 8),
-                _buildRosterMetricsCard(
-                  theme,
-                  ownersCount,
-                  adminsCount,
-                  salesCount,
-                ),
+                _buildRosterMetricsCard(theme, 1, adminsCount, salesCount),
                 const SizedBox(height: 24),
+
+                ownerAsync.maybeWhen(
+                  data: (ownerUser) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 24),
+                      child: ownerUser != null
+                          ? _buildOwnerTile(theme, ownerUser)
+                          : SizedBox.shrink(),
+                    );
+                  },
+                  // Renders a smooth shimmer skeleton or subtle box matching your layout while loading profile data over network paths
+                  orElse: () => const Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: CircularProgressIndicator(),
+                    ),
+                  ),
+                ),
+
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -220,6 +243,113 @@ class _ParticipantsManagementViewState
     );
   }
 
+  Widget _buildOwnerTile(ThemeData theme, UserModel owner) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        // Subtle background tint to denote premium status
+        color: theme.colorScheme.primary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: theme.colorScheme.primary.withValues(alpha: 0.15),
+          width: 1.5,
+        ),
+      ),
+      child: Row(
+        children: [
+          // Premium Profile Image Canvas with Double Border Details
+          Container(
+            padding: const EdgeInsets.all(2.5),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: theme.colorScheme.primary.withValues(alpha: 0.4),
+                width: 1.5,
+              ),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(22),
+              child: SizedBox(
+                width: 44,
+                height: 44,
+                child: AppNetworkImage(
+                  path: owner.profilePic,
+                  size: 44,
+                  fallbackLetter: owner.name.isNotEmpty
+                      ? owner.name[0].toUpperCase()
+                      : 'O',
+                  isCircle: true,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+
+          // Owner Name and Role Typography
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  owner.name,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  "WORKSPACE OWNER",
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                    color: theme.colorScheme.primary,
+                    letterSpacing: 1.1,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Distinct Premium Badge
+          Card(
+            color: theme.colorScheme.primary,
+            elevation: 0,
+            shape: const StadiumBorder(),
+            margin: EdgeInsets.zero,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.verified_user_rounded,
+                    size: 12,
+                    color: theme.colorScheme.onPrimary,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    "CREATOR",
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                      color: theme.colorScheme.onPrimary,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// --- 2. OVERLAY SHEET: ADD/INVITE NEW STAFF ---
   void _showInviteStaffSheet(BuildContext context) {
     final theme = Theme.of(context);
@@ -365,7 +495,10 @@ class _ParticipantsManagementViewState
   }
 
   /// --- ACTIONS ROUTER ENGINE ---
-  void _handleMenuAction(String action, ParticipantModel participant) {
+  void _handleMenuAction(String action, ParticipantModel participant) async {
+    final business = await ref.read(
+      singleBusinessProvider(widget.businessId).future,
+    );
     final notifier = ref.read(participantProvider(widget.businessId).notifier);
 
     if (action == 'toggle_status') {
@@ -374,13 +507,31 @@ class _ParticipantsManagementViewState
         userId: participant.userId,
         isActive: !participant.isActive,
       );
+
+      saveAndSendNotification(
+        title: "Access Update",
+        body:
+            "Your access has been ${participant.isActive ? "Suspended" : "Restored"} in ${business.name}",
+        receiverId: participant.userId,
+        businessId: widget.businessId,
+      );
     } else if (action == 'remove') {
       notifier.removeStaff(
         businessId: widget.businessId,
         userId: participant.userId,
       );
+
+      saveAndSendNotification(
+        title: "Removed from ${business.name.toUpperCase()}",
+        body: "Your have been removed from ${business.name}",
+        receiverId: participant.userId,
+        businessId: widget.businessId,
+      );
     } else if (action == 'role') {
-      _showRoleUpdateDialog(context, participant);
+      _showRoleUpdateDialog(
+        AppData.shared.navigatorKey.currentContext ?? context,
+        participant,
+      );
     }
   }
 
@@ -397,7 +548,7 @@ class _ParticipantsManagementViewState
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         content: DropdownButtonFormField<String>(
-          value: roleSelection,
+          initialValue: roleSelection,
           items: const [
             DropdownMenuItem(value: 'salesman', child: Text("Salesman")),
             DropdownMenuItem(value: 'admin', child: Text("Admin")),
@@ -411,8 +562,6 @@ class _ParticipantsManagementViewState
           ),
           TextButton(
             onPressed: () async {
-              final sender = await ref.read(authControllerProvider.future);
-
               Navigator.pop(
                 AppData.shared.navigatorKey.currentContext ?? context,
               );
@@ -424,18 +573,16 @@ class _ParticipantsManagementViewState
                     newRole: roleSelection,
                   );
 
-              // Send Notification:
-              ref
-                  .read(notificationProvider.notifier)
-                  .sendDynamicNotification(
-                    targetUserId: participant.userId,
-                    businessId: widget.businessId,
-                    title: "Privileges Modified",
-                    body:
-                        "Your profile access level was changed to: ${roleSelection.toUpperCase()}.",
-                    actionType: "navigate",
-                    payload: {"route": "/dashboard", "senderId": sender?.uid},
-                  );
+              String title = "Privileges Modified";
+              String body =
+                  "Your profile access level was changed to: ${roleSelection.toUpperCase()}.";
+
+              saveAndSendNotification(
+                title: title,
+                body: body,
+                receiverId: participant.userId,
+                businessId: widget.businessId,
+              );
             },
             child: const Text("Save Privileges"),
           ),

@@ -4,9 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:sprint_14/clients/notifications/notification_service.dart';
+import 'package:sprint_14/clients/notifications/notification_cloud_service.dart';
 import 'package:sprint_14/providers/biometric_provider/biometric_provider.dart';
 import 'package:sprint_14/providers/ledger_provider/ledger_provider.dart';
+import 'package:sprint_14/providers/notification_provider/notification_provider.dart';
 import 'package:sprint_14/services/biometric_service.dart';
 import 'package:sprint_14/views/add_or_update_ledger_view.dart';
 import 'package:sprint_14/views/business_views/business_view.dart';
@@ -25,7 +26,8 @@ class _HomeViewState extends ConsumerState<HomeView>
     with WidgetsBindingObserver {
   int selectedView = 0;
   late PageController _pageController;
-  final NotificationService _notificationService = NotificationService();
+  final NotificationCloudService _notificationService =
+      NotificationCloudService();
 
   @override
   void initState() {
@@ -48,6 +50,7 @@ class _HomeViewState extends ConsumerState<HomeView>
           result.contains(ConnectivityResult.mobile)) {
         // ref.read(projectNotifierProvider.notifier).syncPendingProjects();
         ref.read(ledgerProvider.notifier).syncPendingLedgers();
+        ref.read(notificationProvider.notifier).syncPendingNotifications();
       }
     });
   }

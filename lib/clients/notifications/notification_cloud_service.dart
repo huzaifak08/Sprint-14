@@ -11,7 +11,7 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as ts;
 import 'package:flutter_timezone/flutter_timezone.dart';
 
-class NotificationService {
+class NotificationCloudService {
   FirebaseMessaging get _firebaseMessaging => FirebaseMessaging.instance;
   FlutterLocalNotificationsPlugin get _flutterLocalNotiPlugin =>
       FlutterLocalNotificationsPlugin();
@@ -174,11 +174,14 @@ class NotificationService {
         iOS: darwinNotificationDetails,
       );
 
+      final int safeUniqueNotificationId = DateTime.now().millisecondsSinceEpoch
+          .remainder(100000);
+
       // Show Notifications:
       Future.delayed(Duration.zero, () {
         // Todo: Use UUID instead of 0:
         _flutterLocalNotiPlugin.show(
-          id: DateTime.now().microsecondsSinceEpoch,
+          id: safeUniqueNotificationId,
           title: message.notification?.title,
           body: message.notification?.body,
           notificationDetails: notificationDetails,

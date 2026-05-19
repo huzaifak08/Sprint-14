@@ -67,3 +67,8 @@ class UserNotifier extends _$UserNotifier {
     await _refreshUserFileInBackground(userId);
   }
 }
+
+@riverpod
+Future<UserModel?> userProfile(Ref ref, String id) async {
+  return await UserService().getUserData(id);
+}

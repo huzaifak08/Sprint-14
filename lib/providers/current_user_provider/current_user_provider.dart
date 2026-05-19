@@ -5,7 +5,7 @@ import 'package:sprint_14/models/user_model.dart';
 import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
 import 'package:sprint_14/services/storage_service.dart';
 import 'package:sprint_14/services/user_service.dart';
-import 'package:sprint_14/clients/notifications/notification_service.dart';
+import 'package:sprint_14/clients/notifications/notification_cloud_service.dart';
 import 'dart:developer' as dev;
 
 part 'current_user_provider.g.dart';
@@ -24,7 +24,7 @@ class CurrentUserNotifier extends _$CurrentUserNotifier {
         return _initUser(user.uid);
       },
       loading: () => null,
-      error: (_, __) => null,
+      error: (_, _) => null,
     );
   }
 
@@ -49,7 +49,7 @@ class CurrentUserNotifier extends _$CurrentUserNotifier {
     try {
       var cloudUser = await _userService.getUserData(uid);
       if (cloudUser != null) {
-        final token = await NotificationService().getDeviceToken();
+        final token = await NotificationCloudService().getDeviceToken();
 
         if (token != null && !cloudUser.deviceTokens.contains(token)) {
           await _userService.updateDeviceToken(
@@ -132,7 +132,7 @@ class CurrentUserNotifier extends _$CurrentUserNotifier {
   Future<void> clearUser() async {
     final uid = state.value?.uid;
     if (uid != null) {
-      final token = await NotificationService().getDeviceToken();
+      final token = await NotificationCloudService().getDeviceToken();
       if (token != null) {
         await _userService.updateDeviceToken(
           uid: uid,
