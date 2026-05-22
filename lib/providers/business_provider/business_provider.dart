@@ -4,9 +4,11 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:sprint_14/cache/tables/business_table.dart';
 import 'package:sprint_14/models/business_model.dart';
+import 'package:sprint_14/models/participant_model.dart';
 import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
 import 'package:sprint_14/providers/current_user_provider/current_user_provider.dart';
 import 'package:sprint_14/providers/participant_provider/participant_provider.dart';
+import 'package:sprint_14/responses/user_business_permissions.dart';
 import 'package:sprint_14/services/business_service.dart';
 import 'dart:developer' as dev;
 
@@ -207,17 +209,6 @@ Future<BusinessModel> singleBusiness(Ref ref, String businessId) async {
   return buss;
 }
 
-/// Represents a completely open-ended user permission mapping profile.
-class UserBusinessPermissions {
-  final bool isOwner;
-  final String role; // Can be 'admin', 'salesman', 'manager', 'auditor', etc.
-
-  UserBusinessPermissions({required this.isOwner, required this.role});
-
-  bool get hasAdminPrivileges => isOwner || role == 'admin';
-  bool get isSalesman => !isOwner && role == 'salesman';
-}
-
 @riverpod
 Future<UserBusinessPermissions> currentBusinessRole(
   Ref ref,
@@ -226,11 +217,11 @@ Future<UserBusinessPermissions> currentBusinessRole(
   final authUser = ref.watch(authControllerProvider).value;
   if (authUser == null || businessId.isEmpty) {
     dev.log("Auth User empty", name: "RoleProvider");
-    return UserBusinessPermissions(isOwner: false, role: 'none');
+    return UserBusinessPermissions(role: 'none');
   }
 
-  // 1. Check direct business ownership from the cache
   try {
+    // 1. Fetch the business profile to verify ownership rules
     final business = await ref.watch(singleBusinessProvider(businessId).future);
 
     if (business.ownerId == authUser.uid) {
@@ -238,29 +229,36 @@ Future<UserBusinessPermissions> currentBusinessRole(
         "Current user is owner of ${business.name}",
         name: "RoleProvider",
       );
-      return UserBusinessPermissions(isOwner: true, role: 'owner');
-    } else {
-      final particiants = await ref.watch(
-        participantProvider(businessId).future,
-      );
-
-      var par = particiants.firstWhere(
-        (element) => element.userId == authUser.uid,
-      );
-
-      dev.log("User is ${par.role}", name: "RoleProvider");
-
-      return UserBusinessPermissions(
-        isOwner: false,
-        role: par.role.toLowerCase().trim(),
-      );
+      return UserBusinessPermissions(role: 'owner');
     }
-  } catch (e) {
-    dev.log(
-      "Business data unavailable for ownership assessment: $e",
-      name: "RoleProvider",
+
+    // 2. If not the owner, fetch the team participants roster array list
+    final participants = await ref.watch(
+      participantProvider(businessId).future,
     );
 
-    return UserBusinessPermissions(isOwner: false, role: 'none');
+    // Look for the matching member record safely
+    final matchingParticipant = participants
+        .cast<ParticipantModel?>()
+        .firstWhere(
+          (element) => element?.userId == authUser.uid,
+          orElse: () => null,
+        );
+
+    if (matchingParticipant == null || !matchingParticipant.isActive) {
+      dev.log(
+        "User is not an active participant in this workspace",
+        name: "RoleProvider",
+      );
+      return UserBusinessPermissions(role: 'none');
+    }
+
+    final String cleanRole = matchingParticipant.role.toLowerCase().trim();
+    dev.log("User role parsed successfully: $cleanRole", name: "RoleProvider");
+
+    return UserBusinessPermissions(role: cleanRole);
+  } catch (e) {
+    dev.log("Business data assessment exception: $e", name: "RoleProvider");
+    return UserBusinessPermissions(role: 'none');
   }
 }

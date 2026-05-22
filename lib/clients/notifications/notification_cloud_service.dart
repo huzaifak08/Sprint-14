@@ -391,4 +391,9 @@ class NotificationCloudService {
   Future<void> cancelProjectNotifications({required int id}) async {
     await _flutterLocalNotiPlugin.cancel(id: id);
   }
+
+  Future<void> subscribeToAll() async {
+    await _firebaseMessaging.subscribeToTopic("all");
+    dev.log("Subscribed to ALL", name: "Notifications Cloud Service");
+  }
 }

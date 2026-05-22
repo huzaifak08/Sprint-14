@@ -44,6 +44,7 @@ class _HomeViewState extends ConsumerState<HomeView>
     _notificationService.requestNotificationPermission();
     _notificationService.handleForegroundNotifications(context);
     _notificationService.setUpInteractMessage(context);
+    _notificationService.subscribeToAll();
 
     Connectivity().onConnectivityChanged.listen((result) {
       if (result.contains(ConnectivityResult.wifi) ||
@@ -272,17 +273,76 @@ class _HomeViewState extends ConsumerState<HomeView>
   }
 
   Widget _buildNotificationButton() {
+    final unreadCount = ref.watch(notificationUnreadCountProvider);
+    final theme = Theme.of(context);
+
     return Padding(
-      padding: const EdgeInsets.all(10),
-      child: CircleAvatar(
-        backgroundColor: const Color(0xFF4285F4),
-        child: IconButton(
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const NotificationsView()),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      child: Stack(
+        alignment: Alignment.center,
+        clipBehavior: Clip.none,
+        children: [
+          // Premium Action Icon Button Base
+          CircleAvatar(
+            radius: 22,
+            backgroundColor: const Color(
+              0xFF4285F4,
+            ).withValues(alpha: 0.1), // Subtle tint background
+            child: IconButton(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const NotificationsView(),
+                ),
+              ),
+              icon: const Icon(
+                Icons.notifications_rounded,
+                color: Color(0xFF4285F4),
+              ),
+            ),
           ),
-          icon: const Icon(Icons.notifications, color: Colors.white),
-        ),
+
+          // 🔥 THE ATTRACIVE BADGE LAYER
+          if (unreadCount > 0) // Only render if there are actually unread items
+            Positioned(
+              top: 2,
+              right: 2,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                constraints: const BoxConstraints(
+                  minWidth: 18,
+                  minHeight: 18, // Ensures a perfect circle for single digits
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.redAccent, // Vibrant accent red
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: theme
+                        .scaffoldBackgroundColor, // Clean mask separation line
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.15),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: Text(
+                    unreadCount > 99 ? '99+' : unreadCount.toString(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                      height: 1.1,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:sprint_14/components/app_network_image.dart';
+import 'package:sprint_14/responses/user_business_permissions.dart';
 import 'package:sprint_14/views/business_views/participants_management_view.dart';
 import 'package:uuid/uuid.dart';
 import 'package:sprint_14/models/business_model.dart';
@@ -121,7 +122,7 @@ class _BusinessCard extends ConsumerWidget {
                 ),
               ),
               onLongPress: () =>
-                  role.isSalesman ? null : _showOptions(context, ref),
+                  role.isSalesman ? null : _showOptions(context, ref, role),
               contentPadding: const EdgeInsets.all(16),
               leading: AppNetworkImage(
                 path: business.logoPath,
@@ -156,7 +157,11 @@ class _BusinessCard extends ConsumerWidget {
     );
   }
 
-  void _showOptions(BuildContext context, WidgetRef ref) {
+  void _showOptions(
+    BuildContext context,
+    WidgetRef ref,
+    UserBusinessPermissions role,
+  ) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -210,23 +215,26 @@ class _BusinessCard extends ConsumerWidget {
                 );
               },
             ),
-            ListTile(
-              leading: const Icon(
-                Icons.delete_sweep_rounded,
-                color: Colors.red,
-              ),
-              title: const Text(
-                "Delete Business",
-                style: TextStyle(
+            if (role.isOwner)
+              ListTile(
+                leading: const Icon(
+                  Icons.delete_sweep_rounded,
                   color: Colors.red,
-                  fontWeight: FontWeight.bold,
                 ),
+                title: const Text(
+                  "Delete Business",
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                onTap: () {
+                  ref
+                      .read(businessProvider.notifier)
+                      .deleteBusiness(business.id);
+                  Navigator.pop(context);
+                },
               ),
-              onTap: () {
-                ref.read(businessProvider.notifier).deleteBusiness(business.id);
-                Navigator.pop(context);
-              },
-            ),
             const SizedBox(height: 24),
           ],
         ),

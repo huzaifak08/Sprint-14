@@ -132,7 +132,7 @@ class _ParticipantsManagementViewState
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: staffList.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  separatorBuilder: (_, _) => const SizedBox(height: 10),
                   itemBuilder: (context, index) {
                     // 🔥 MODIFIED: Handled via high performance standalone Consumer components
                     return _StaffRosterTileItem(
@@ -684,7 +684,7 @@ class _StaffRosterTileItem extends ConsumerWidget {
                   ),
                 ),
               ),
-              error: (_, __) => AppNetworkImage(
+              error: (_, _) => AppNetworkImage(
                 path: null,
                 size: 46,
                 isCircle: true,
@@ -717,7 +717,7 @@ class _StaffRosterTileItem extends ConsumerWidget {
                         ),
                       ),
                     ),
-                    error: (_, __) => Text(
+                    error: (_, _) => Text(
                       "UID: ${participant.userId.substring(0, 8)}...",
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
