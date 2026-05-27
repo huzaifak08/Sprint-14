@@ -9,6 +9,10 @@ final String salesCollection = "sales";
 final String expensesCollection = "expenses";
 final String participantsCollection = 'participants';
 const String notificationsCollection = "notifications";
+const String eventLedgersCollection = "event_ledgers";
+const String eventParticipantsCollection = "event_participants";
+const String transactionsCollection = "event_transactions";
+const String milestonesCollection = "event_settlement_milestones";
 
 final String themeKey = "sprint-14-theme";
 

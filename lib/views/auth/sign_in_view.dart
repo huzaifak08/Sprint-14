@@ -34,6 +34,7 @@ class _SignInViewState extends ConsumerState<SignInView> {
   }
 
   void _handleSignIn() async {
+    FocusScope.of(context).unfocus();
     if (_formKey.currentState!.validate()) {
       // 1. Call the provider and capture the returned result
       final AuthResult? result = await ref

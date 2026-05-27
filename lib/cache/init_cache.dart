@@ -1,5 +1,8 @@
 import 'dart:developer' as dev;
 import 'package:sprint_14/cache/tables/business_table.dart';
+import 'package:sprint_14/cache/tables/event_ledger_table.dart';
+import 'package:sprint_14/cache/tables/event_participant_table.dart';
+import 'package:sprint_14/cache/tables/event_transaction_table.dart';
 import 'package:sprint_14/cache/tables/expense_table.dart';
 import 'package:sprint_14/cache/tables/ledger_table.dart';
 import 'package:sprint_14/cache/tables/notification_table.dart';
@@ -7,6 +10,7 @@ import 'package:sprint_14/cache/tables/participant_table.dart';
 import 'package:sprint_14/cache/tables/product_table.dart';
 import 'package:sprint_14/cache/tables/sale_table.dart';
 import 'package:sprint_14/cache/tables/settings_table.dart';
+import 'package:sprint_14/cache/tables/settlement_milestone_table.dart';
 import 'package:sprint_14/cache/tables/user_table.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
@@ -30,7 +34,7 @@ class LocalCacheManager {
 
     return openDatabase(
       path,
-      version: 16, // Increment version number when schema changes
+      version: 17, // Increment version number when schema changes
       onCreate: (db, version) async {
         // await ProjectTable.createTable(db);
         await LedgerTable.createTable(db);
@@ -42,6 +46,10 @@ class LocalCacheManager {
         await ParticipantTable.createTable(db);
         await NotificationTable.createTable(db);
         await SettingsTable.createTable(db);
+        await EventLedgerTable.createTable(db);
+        await EventParticipantTable.createTable(db);
+        await EventTransactionTable.createTable(db);
+        await SettlementMilestoneTable.createTable(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 14) {
@@ -68,6 +76,10 @@ class LocalCacheManager {
           await SaleTable.createTable(db);
           await ExpenseTable.createTable(db);
           await SettingsTable.createTable(db);
+          await EventLedgerTable.createTable(db);
+          await EventParticipantTable.createTable(db);
+          await EventTransactionTable.createTable(db);
+          await SettlementMilestoneTable.createTable(db);
 
           dev.log("Cache flushed and tables rebuilt successfully.");
         }
@@ -80,6 +92,15 @@ class LocalCacheManager {
         if (oldVersion < 16) {
           await NotificationTable.createTable(db);
           dev.log("v16- Particpant Table created");
+        }
+
+        if (oldVersion < 17) {
+          await EventLedgerTable.createTable(db);
+          await EventParticipantTable.createTable(db);
+          await EventTransactionTable.createTable(db);
+          await SettlementMilestoneTable.createTable(db);
+
+          dev.log("v17- Event Ledger tables created");
         }
 
         // New Changes Here:

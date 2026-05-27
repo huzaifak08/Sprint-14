@@ -41,6 +41,7 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
 
   /// --- THE LOGIC ---
   void _handleSignUp() async {
+    FocusScope.of(context).unfocus();
     if (_formKey.currentState!.validate()) {
       // 1. Await the result from the provider
       final AuthResult? result = await ref

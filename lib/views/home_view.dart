@@ -11,6 +11,7 @@ import 'package:sprint_14/providers/notification_provider/notification_provider.
 import 'package:sprint_14/services/biometric_service.dart';
 import 'package:sprint_14/views/add_or_update_ledger_view.dart';
 import 'package:sprint_14/views/business_views/business_view.dart';
+import 'package:sprint_14/views/event_ledgers_views/event_ledgers_view.dart';
 import 'package:sprint_14/views/ledger_view/ledger_view.dart';
 import 'package:sprint_14/views/notifications_view.dart';
 import 'package:sprint_14/views/settings_view.dart';
@@ -215,7 +216,7 @@ class _HomeViewState extends ConsumerState<HomeView>
       body: PageView(
         controller: _pageController,
         onPageChanged: (index) => setState(() => selectedView = index),
-        children: const [LedgerView(), BusinessView()],
+        children: const [LedgerView(), EventLedgersView(), BusinessView()],
       ),
       floatingActionButton: selectedView == 0
           ? FloatingActionButton(
@@ -246,6 +247,11 @@ class _HomeViewState extends ConsumerState<HomeView>
             ),
             ButtonSegment(
               value: 1,
+              label: Text("Events"),
+              icon: Icon(Icons.event),
+            ),
+            ButtonSegment(
+              value: 2,
               label: Text("Business"),
               icon: Icon(Icons.business),
             ),

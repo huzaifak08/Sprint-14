@@ -187,7 +187,7 @@ final class CurrentBusinessRoleProvider
 }
 
 String _$currentBusinessRoleHash() =>
-    r'dcb32cf98fe2b67090726c837202cc0f6b62b1d6';
+    r'48d48b2848e3b9f4f0a068959b1df02eefe37af6';
 
 final class CurrentBusinessRoleFamily extends $Family
     with $FunctionalFamilyOverride<FutureOr<UserBusinessPermissions>, String> {
