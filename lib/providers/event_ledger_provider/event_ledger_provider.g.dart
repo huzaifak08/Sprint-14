@@ -35,7 +35,7 @@ final class EventLedgerNotifierProvider
 }
 
 String _$eventLedgerNotifierHash() =>
-    r'2d6297df62f2bdaf2d629d740dca3ec2838cb51b';
+    r'219ecb47be4947637793b65494b36aea44f80790';
 
 abstract class _$EventLedgerNotifier
     extends $AsyncNotifier<List<EventLedgerModel>> {
@@ -108,7 +108,7 @@ final class ActiveEventTransactionsProvider
 }
 
 String _$activeEventTransactionsHash() =>
-    r'868a6d9fe32c3a3be97b78833673fd7f15894cc5';
+    r'3330ef99ead4364187e1b0c4f82f247cd77ed79a';
 
 final class ActiveEventTransactionsFamily extends $Family
     with
@@ -212,7 +212,7 @@ final class EventParticipantsRosterProvider
 }
 
 String _$eventParticipantsRosterHash() =>
-    r'a3f39f070cdfccf23497b9902066701ff31efb3d';
+    r'6823a1dfede1382868db93115c7e2aaa74855c04';
 
 final class EventParticipantsRosterFamily extends $Family
     with
@@ -324,7 +324,7 @@ final class SingleEventLedgerProvider
   }
 }
 
-String _$singleEventLedgerHash() => r'370364c358727431199094f05f32ce8003dee593';
+String _$singleEventLedgerHash() => r'80b3843bbd781857297a4558b6708aba9d7bff14';
 
 final class SingleEventLedgerFamily extends $Family
     with $FunctionalFamilyOverride<FutureOr<EventLedgerModel>, String> {

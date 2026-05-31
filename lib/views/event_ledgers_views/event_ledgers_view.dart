@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sprint_14/helpers/app_data.dart';
 import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
 import 'package:sprint_14/providers/event_ledger_provider/event_ledger_provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:sprint_14/models/event_ledger_model.dart';
 import 'package:sprint_14/models/event_participant_model.dart';
-import 'event_ledgers_dashboard_view.dart'; // Import your inner dashboard
+import 'event_ledgers_dashboard_view.dart';
 
 class EventLedgersView extends ConsumerStatefulWidget {
   const EventLedgersView({super.key});
@@ -21,27 +22,6 @@ class _EventLedgersViewState extends ConsumerState<EventLedgersView> {
     final ledgersAsync = ref.watch(eventLedgerProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: Text(
-          "EVENT LEDGERS",
-          style: TextStyle(
-            fontWeight: FontWeight.w900,
-            letterSpacing: -0.5,
-            color: theme.colorScheme.onSecondary,
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.sync_rounded, color: theme.colorScheme.primary),
-            onPressed: () => ref
-                .read(eventLedgerProvider.notifier)
-                .syncPendingRecordsToCloud(),
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
       body: ledgersAsync.when(
         data: (ledgersList) {
           if (ledgersList.isEmpty) {
@@ -55,12 +35,11 @@ class _EventLedgersViewState extends ConsumerState<EventLedgersView> {
             child: ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: ledgersList.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              separatorBuilder: (_, _) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
                 final ledger = ledgersList[index];
                 return GestureDetector(
                   onTap: () {
-                    // Navigate to individual dashboard space safely passing the loaded ID
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -69,8 +48,15 @@ class _EventLedgersViewState extends ConsumerState<EventLedgersView> {
                       ),
                     );
                   },
+                  onLongPress: () => _showEditDeleteMenu(
+                    context,
+                    ledger,
+                  ), // 🔥 Option 1: Long Press Access
                   child: Container(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     decoration: BoxDecoration(
                       color: theme.colorScheme.surface,
                       borderRadius: BorderRadius.circular(16),
@@ -115,12 +101,55 @@ class _EventLedgersViewState extends ConsumerState<EventLedgersView> {
                             ],
                           ),
                         ),
-                        Icon(
-                          Icons.arrow_forward_ios_rounded,
-                          size: 16,
-                          color: theme.colorScheme.onSecondary.withValues(
-                            alpha: 0.3,
+                        // 🔥 Option 2: Clean Trailing Menu Options Button
+                        PopupMenuButton<String>(
+                          icon: Icon(
+                            Icons.more_vert_rounded,
+                            color: theme.colorScheme.onSecondary.withValues(
+                              alpha: 0.4,
+                            ),
                           ),
+                          onSelected: (action) {
+                            if (action == 'edit') {
+                              _showCreateLedgerBottomSheet(
+                                context,
+                                existingLedger: ledger,
+                              );
+                            } else if (action == 'delete') {
+                              _confirmDeleteDialog(context, ledger);
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            const PopupMenuItem(
+                              value: 'edit',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.edit_outlined, size: 18),
+                                  SizedBox(width: 8),
+                                  Text("Edit Title"),
+                                ],
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: 'delete',
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.delete_outline_rounded,
+                                    size: 18,
+                                    color: theme.colorScheme.error,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    "Delete",
+                                    style: TextStyle(
+                                      color: theme.colorScheme.error,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -193,7 +222,93 @@ class _EventLedgersViewState extends ConsumerState<EventLedgersView> {
     }
   }
 
-  void _showCreateLedgerBottomSheet(BuildContext context) {
+  void _showEditDeleteMenu(BuildContext context, EventLedgerModel ledger) {
+    final theme = Theme.of(context);
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: theme.colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Text(
+                ledger.title.toUpperCase(),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                  letterSpacing: 1,
+                ),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit_rounded),
+              title: const Text("Edit Ledger Details"),
+              onTap: () {
+                Navigator.pop(context);
+                _showCreateLedgerBottomSheet(context, existingLedger: ledger);
+              },
+            ),
+            ListTile(
+              leading: Icon(
+                Icons.delete_sweep_rounded,
+                color: theme.colorScheme.error,
+              ),
+              title: Text(
+                "Delete Workspace",
+                style: TextStyle(
+                  color: theme.colorScheme.error,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _confirmDeleteDialog(context, ledger);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _confirmDeleteDialog(BuildContext context, EventLedgerModel ledger) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Delete Ledger?"),
+        content: Text(
+          "Are you completely sure you want to remove '${ledger.title}'? This action can sync changes away across all shared members.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              ref.read(eventLedgerProvider.notifier).deleteLedger(ledger.id);
+              Navigator.pop(context);
+            },
+            child: const Text("Delete"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCreateLedgerBottomSheet(
+    BuildContext context, {
+    EventLedgerModel? existingLedger,
+  }) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -201,16 +316,17 @@ class _EventLedgersViewState extends ConsumerState<EventLedgersView> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (_) => const _CreateEventLedgerSheet(),
+      builder: (_) => _CreateEventLedgerSheet(existingLedger: existingLedger),
     );
   }
 }
 
 // =========================================================================
-// BOTTOM SHEET: CREATION MODAL WITH USER-ORIENTED EXPANSION ENGINE
+// BOTTOM SHEET: CREATION & EDIT MODAL PAYLOAD ENGINE
 // =========================================================================
 class _CreateEventLedgerSheet extends ConsumerStatefulWidget {
-  const _CreateEventLedgerSheet();
+  final EventLedgerModel? existingLedger;
+  const _CreateEventLedgerSheet({this.existingLedger});
 
   @override
   ConsumerState<_CreateEventLedgerSheet> createState() =>
@@ -224,8 +340,34 @@ class _CreateEventLedgerSheetState
 
   String _selectedType = "Hostel";
   bool _isCustomTypeActive = false;
+  bool _isEditMode = false;
 
   final List<String> _baseTypes = ["Hostel", "Trip", "Function"];
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.existingLedger != null) {
+      _isEditMode = true;
+      _titleController.text = widget.existingLedger!.title;
+
+      // Match incoming type configuration values cleanly
+      final String formattedType = widget.existingLedger!.type.trim();
+      final bool matchesPreset = _baseTypes.any(
+        (t) => t.toLowerCase() == formattedType.toLowerCase(),
+      );
+
+      if (matchesPreset) {
+        _selectedType = _baseTypes.firstWhere(
+          (t) => t.toLowerCase() == formattedType.toLowerCase(),
+        );
+        _isCustomTypeActive = false;
+      } else {
+        _isCustomTypeActive = true;
+        _customTypeController.text = widget.existingLedger!.type;
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -243,9 +385,9 @@ class _CreateEventLedgerSheetState
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            "Create Project Ledger",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+          Text(
+            _isEditMode ? "Modify Ledger Settings" : "Create Project Ledger",
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 16),
           TextField(
@@ -259,49 +401,52 @@ class _CreateEventLedgerSheetState
             ),
           ),
           const SizedBox(height: 16),
-          _isCustomTypeActive
-              ? TextField(
-                  controller: _customTypeController,
-                  decoration: InputDecoration(
-                    labelText: "Custom Ledger Type",
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.cancel),
-                      onPressed: () =>
-                          setState(() => _isCustomTypeActive = false),
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                )
-              : DropdownButtonFormField<String>(
-                  initialValue: _selectedType,
-                  hint: Text("Ledger Classification Type"),
-                  decoration: InputDecoration(
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  items: [
-                    ..._baseTypes.map(
-                      (t) => DropdownMenuItem(value: t, child: Text(t)),
-                    ),
-                    const DropdownMenuItem(
-                      value: "ADD_CUSTOM_TYPE",
-                      child: Text(
-                        "+ Add Custom Type",
-                        style: TextStyle(fontWeight: FontWeight.bold),
+          // 🔥 Only allow editing classification type if creating new workspace to prevent transaction schema crashes
+          if (!_isEditMode)
+            _isCustomTypeActive
+                ? TextField(
+                    controller: _customTypeController,
+                    decoration: InputDecoration(
+                      labelText: "Custom Ledger Type",
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.cancel),
+                        onPressed: () =>
+                            setState(() => _isCustomTypeActive = false),
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                  ],
-                  onChanged: (val) {
-                    if (val == "ADD_CUSTOM_TYPE") {
-                      setState(() => _isCustomTypeActive = true);
-                    } else if (val != null) {
-                      setState(() => _selectedType = val);
-                    }
-                  },
-                ),
+                  )
+                : DropdownButtonFormField<String>(
+                    initialValue:
+                        _selectedType, // Fixed initialValue crash bug pass rule here
+                    decoration: InputDecoration(
+                      labelText: "Ledger Classification Type",
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    items: [
+                      ..._baseTypes.map(
+                        (t) => DropdownMenuItem(value: t, child: Text(t)),
+                      ),
+                      const DropdownMenuItem(
+                        value: "ADD_CUSTOM_TYPE",
+                        child: Text(
+                          "+ Add Custom Type",
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                    onChanged: (val) {
+                      if (val == "ADD_CUSTOM_TYPE") {
+                        setState(() => _isCustomTypeActive = true);
+                      } else if (val != null) {
+                        setState(() => _selectedType = val);
+                      }
+                    },
+                  ),
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
@@ -314,56 +459,72 @@ class _CreateEventLedgerSheetState
                 ),
               ),
               onPressed: () async {
-                if (_titleController.text.trim().isEmpty || authUser == null)
+                if (_titleController.text.trim().isEmpty || authUser == null) {
                   return;
+                }
 
-                final String finalType = _isCustomTypeActive
-                    ? _customTypeController.text.trim()
-                    : _selectedType;
-                if (finalType.isEmpty) return;
+                if (_isEditMode) {
+                  // 🔥 EXECUTE UPDATE TASK
+                  final updatedLedger = widget.existingLedger!.copyWith(
+                    title: _titleController.text.trim(),
+                  );
+                  await ref
+                      .read(eventLedgerProvider.notifier)
+                      .updateLedger(updatedLedger);
+                  Navigator.pop(
+                    AppData.shared.navigatorKey.currentContext ?? context,
+                  );
+                } else {
+                  // 🔥 EXECUTE NEW TARGET ENTRY GENERATION
+                  final String finalType = _isCustomTypeActive
+                      ? _customTypeController.text.trim()
+                      : _selectedType;
+                  if (finalType.isEmpty) return;
 
-                final String newLedgerId = const Uuid().v4();
+                  final String newLedgerId = const Uuid().v4();
 
-                final newLedger = EventLedgerModel(
-                  id: newLedgerId,
-                  title: _titleController.text.trim(),
-                  creatorId: authUser.uid,
-                  type: finalType.toLowerCase(),
-                  createdAt: DateTime.now(),
-                  isSynced: false,
-                );
+                  final newLedger = EventLedgerModel(
+                    id: newLedgerId,
+                    title: _titleController.text.trim(),
+                    creatorId: authUser.uid,
+                    type: finalType.toLowerCase(),
+                    createdAt: DateTime.now(),
+                    isSynced: false,
+                  );
 
-                // 🔥 CRITICAL: Automatically add the creator as Participant #1 in this new ledger workspace
-                final autoParticipant = EventParticipantModel(
-                  id: const Uuid().v4(),
-                  eventId: newLedgerId,
-                  userId: authUser.uid,
-                  displayName: "You",
-                  joinedAt: DateTime.now(),
-                  isSynced: false,
-                );
+                  final autoParticipant = EventParticipantModel(
+                    id: const Uuid().v4(),
+                    eventId: newLedgerId,
+                    userId: authUser.uid,
+                    displayName: "You",
+                    joinedAt: DateTime.now(),
+                    isSynced: false,
+                  );
 
-                // Save both to local db and fire cloud synchronization chain
-                await ref
-                    .read(eventLedgerProvider.notifier)
-                    .addLedger(newLedger);
-                await ref
-                    .read(eventParticipantsRosterProvider(newLedgerId).notifier)
-                    .addParticipant(autoParticipant);
+                  await ref
+                      .read(eventLedgerProvider.notifier)
+                      .addLedger(newLedger);
+                  await ref
+                      .read(
+                        eventParticipantsRosterProvider(newLedgerId).notifier,
+                      )
+                      .addParticipant(autoParticipant);
 
-                Navigator.pop(context);
+                  Navigator.pop(
+                    AppData.shared.navigatorKey.currentContext ?? context,
+                  );
 
-                // Immediately open the newly generated empty workspace view safely
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) =>
-                        EventLedgersDashboardView(eventId: newLedgerId),
-                  ),
-                );
+                  Navigator.push(
+                    AppData.shared.navigatorKey.currentContext ?? context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          EventLedgersDashboardView(eventId: newLedgerId),
+                    ),
+                  );
+                }
               },
               child: Text(
-                "Launch Workspace",
+                _isEditMode ? "Save Workspace Details" : "Launch Workspace",
                 style: TextStyle(
                   color: theme.colorScheme.onPrimary,
                   fontWeight: FontWeight.bold,

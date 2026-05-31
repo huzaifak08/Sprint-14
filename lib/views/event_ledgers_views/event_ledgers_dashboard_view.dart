@@ -39,7 +39,7 @@ class _EventLedgersDashboardViewState
             ),
           ),
           loading: () => const Text("Loading..."),
-          error: (_, __) => const Text("Workspace Error"),
+          error: (_, _) => const Text("Workspace Error"),
         ),
         actions: [
           IconButton(
@@ -65,7 +65,6 @@ class _EventLedgersDashboardViewState
           padding: const EdgeInsets.symmetric(horizontal: 16),
           children: [
             const SizedBox(height: 8),
-            // 1. Tactile 3-Number Master Matrix Card
             summaryAsync.when(
               data: (summary) => _buildMetricsCard(theme, summary),
               loading: () => const Center(
@@ -77,7 +76,6 @@ class _EventLedgersDashboardViewState
               error: (err, _) => Center(child: Text("Metrics Error: $err")),
             ),
             const SizedBox(height: 24),
-            // 2. Transaction Header
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -94,7 +92,6 @@ class _EventLedgersDashboardViewState
               ],
             ),
             const SizedBox(height: 12),
-            // 3. Isolated High-Performance Transaction List
             _TransactionsSubList(eventId: widget.eventId),
             const SizedBox(height: 100),
           ],
@@ -114,9 +111,6 @@ class _EventLedgersDashboardViewState
     );
   }
 
-  // =========================================================================
-  // Master Matrix Widget Components
-  // =========================================================================
   Widget _buildMetricsCard(ThemeData theme, EventFinancialSummary summary) {
     final bool isOwed = summary.yourNetBalance >= 0;
     final Color balanceColor = isOwed
@@ -265,9 +259,6 @@ class _EventLedgersDashboardViewState
     );
   }
 
-  // =========================================================================
-  // Modals sheets initialization pipelines
-  // =========================================================================
   void _showAddParticipantBottomSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -294,7 +285,7 @@ class _EventLedgersDashboardViewState
 }
 
 // =========================================================================
-// ISOLATED LIST CONSUMER (Ensures dashboard metric cards don't jitter)
+// ISOLATED LIST CONSUMER (With contextual item menu interactions)
 // =========================================================================
 class _TransactionsSubList extends ConsumerWidget {
   final String eventId;
@@ -324,7 +315,7 @@ class _TransactionsSubList extends ConsumerWidget {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           itemCount: transactions.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 10),
+          separatorBuilder: (_, _) => const SizedBox(height: 10),
           itemBuilder: (context, index) {
             final tx = transactions[index];
             return Dismissible(
@@ -342,15 +333,22 @@ class _TransactionsSubList extends ConsumerWidget {
                   color: Colors.white,
                 ),
               ),
-              onDismissed: (_) => ref
-                  .read(activeEventTransactionsProvider(eventId).notifier)
-                  .deleteTransaction(tx.id),
+              onDismissed: (_) {
+                ref
+                    .read(activeEventTransactionsProvider(eventId).notifier)
+                    .deleteTransaction(tx.id);
+              },
               child: Container(
                 decoration: BoxDecoration(
                   color: theme.colorScheme.surface,
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: ListTile(
+                  onTap: () => _showTransactionContextOptions(
+                    context,
+                    ref,
+                    tx,
+                  ), // 🔥 Tap to Edit/Delete
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16,
                     vertical: 4,
@@ -380,13 +378,25 @@ class _TransactionsSubList extends ConsumerWidget {
                       letterSpacing: 0.5,
                     ),
                   ),
-                  trailing: Text(
-                    tx.totalAmount.toStringAsFixed(0),
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                      color: theme.colorScheme.onSecondary,
-                    ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        tx.totalAmount.toStringAsFixed(0),
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          color: theme.colorScheme.onSecondary,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        color: theme.colorScheme.onSecondary.withValues(
+                          alpha: 0.2,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -396,6 +406,79 @@ class _TransactionsSubList extends ConsumerWidget {
       },
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (err, _) => Text("Error: $err"),
+    );
+  }
+
+  void _showTransactionContextOptions(
+    BuildContext context,
+    WidgetRef ref,
+    EventTransactionModel transaction,
+  ) {
+    final theme = Theme.of(context);
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: theme.colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Text(
+                transaction.description.toUpperCase(),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text("Edit Details"),
+              onTap: () {
+                Navigator.pop(context);
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: theme.colorScheme.surface,
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(24),
+                    ),
+                  ),
+                  builder: (_) => _LogSplitSheet(
+                    eventId: eventId,
+                    existingTransaction: transaction,
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: Icon(
+                Icons.delete_outline_rounded,
+                color: theme.colorScheme.error,
+              ),
+              title: Text(
+                "Remove Entry",
+                style: TextStyle(
+                  color: theme.colorScheme.error,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                ref
+                    .read(activeEventTransactionsProvider(eventId).notifier)
+                    .deleteTransaction(transaction.id);
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -488,11 +571,14 @@ class _AddParticipantSheetState extends ConsumerState<_AddParticipantSheet> {
 }
 
 // =========================================================================
-// LOG SPLIT BOTTOM SHEET WITH CACHED CUSTOM CATEGORY INJECTION
+// LOG SPLIT BOTTOM SHEET WITH CACHED CUSTOM CATEGORY INJECTION & EDIT STATE
 // =========================================================================
 class _LogSplitSheet extends ConsumerStatefulWidget {
   final String eventId;
-  const _LogSplitSheet({required this.eventId});
+  final EventTransactionModel?
+  existingTransaction; // 🔥 Receives existing data if editing
+
+  const _LogSplitSheet({required this.eventId, this.existingTransaction});
 
   @override
   ConsumerState<_LogSplitSheet> createState() => _LogSplitSheetState();
@@ -506,8 +592,32 @@ class _LogSplitSheetState extends ConsumerState<_LogSplitSheet> {
   String _selectedCategory = "Food";
   String? _selectedPayerId;
   bool _isCustomCategoryActive = false;
+  bool _isEditMode = false;
 
   final List<String> _basePresets = ["Food", "Transport", "Rent", "Utilities"];
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.existingTransaction != null) {
+      _isEditMode = true;
+      _amountController.text = widget.existingTransaction!.totalAmount
+          .toStringAsFixed(0);
+      _descController.text = widget.existingTransaction!.description;
+      _selectedPayerId = widget.existingTransaction!.paidById;
+
+      final bool matchesPreset = _basePresets.contains(
+        widget.existingTransaction!.category,
+      );
+      if (matchesPreset) {
+        _selectedCategory = widget.existingTransaction!.category;
+        _isCustomCategoryActive = false;
+      } else {
+        _isCustomCategoryActive = true;
+        _customCategoryController.text = widget.existingTransaction!.category;
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -518,7 +628,6 @@ class _LogSplitSheetState extends ConsumerState<_LogSplitSheet> {
       dynamicEventCategoriesProvider(widget.eventId),
     );
 
-    // Consolidate default presets with dynamically loaded SQLite distinct category strings
     final List<String> allCategories = {
       ..._basePresets,
       ...(customCategoriesAsync.value ?? []),
@@ -539,9 +648,9 @@ class _LogSplitSheetState extends ConsumerState<_LogSplitSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            "Log Split Transaction",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+          Text(
+            _isEditMode ? "Modify Split Record" : "Log Split Transaction",
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 16),
           Row(
@@ -582,7 +691,7 @@ class _LogSplitSheetState extends ConsumerState<_LogSplitSheet> {
                         ),
                       )
                     : DropdownButtonFormField<String>(
-                        value: allCategories.contains(_selectedCategory)
+                        initialValue: allCategories.contains(_selectedCategory)
                             ? _selectedCategory
                             : allCategories.first,
                         decoration: InputDecoration(
@@ -627,8 +736,8 @@ class _LogSplitSheetState extends ConsumerState<_LogSplitSheet> {
           if (participants.isNotEmpty)
             DropdownButtonFormField<String>(
               initialValue: _selectedPayerId,
-              hint: Text("Who Paid Out-of-Pocket?"),
               decoration: InputDecoration(
+                labelText: "Who Paid Out-of-Pocket?",
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -660,8 +769,9 @@ class _LogSplitSheetState extends ConsumerState<_LogSplitSheet> {
                 );
                 if (parsedAmount == null ||
                     _descController.text.isEmpty ||
-                    _selectedPayerId == null)
+                    _selectedPayerId == null) {
                   return;
+                }
 
                 final String finalCategoryValue = _isCustomCategoryActive
                     ? _customCategoryController.text.trim()
@@ -676,17 +786,22 @@ class _LogSplitSheetState extends ConsumerState<_LogSplitSheet> {
                 };
 
                 final transactionModel = EventTransactionModel(
-                  id: const Uuid().v4(),
+                  id: _isEditMode
+                      ? widget.existingTransaction!.id
+                      : const Uuid().v4(),
                   eventId: widget.eventId,
                   paidById: _selectedPayerId!,
                   totalAmount: parsedAmount,
                   description: _descController.text.trim(),
                   category: finalCategoryValue,
-                  transactionDate: DateTime.now(),
+                  transactionDate: _isEditMode
+                      ? widget.existingTransaction!.transactionDate
+                      : DateTime.now(),
                   splitDetails: equalSplitDetailsMatrix,
                   isSynced: false,
                 );
 
+                // Riverpod's state updates are handled downstream via addTransaction (using standard upsert logic)
                 ref
                     .read(
                       activeEventTransactionsProvider(widget.eventId).notifier,
@@ -695,7 +810,7 @@ class _LogSplitSheetState extends ConsumerState<_LogSplitSheet> {
                 Navigator.pop(context);
               },
               child: Text(
-                "Save & Distribute",
+                _isEditMode ? "Save Adjustments" : "Save & Distribute",
                 style: TextStyle(
                   color: theme.colorScheme.onPrimary,
                   fontWeight: FontWeight.bold,

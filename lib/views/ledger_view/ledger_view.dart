@@ -13,9 +13,10 @@ class LedgerView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final allTransactions = ref.watch(ledgerProvider);
+    // 1️⃣ Watch the updated async ledger provider state wrapper
+    final ledgersAsync = ref.watch(ledgerProvider);
 
-    // We only compute the time-filtered list once at the top
+    // 2️⃣ Watch your localized filter parameters
     final activeFilter = ref.watch(
       ledgerUiProvider.select((s) => s.activeFilter),
     );
@@ -23,33 +24,45 @@ class LedgerView extends ConsumerWidget {
       ledgerUiProvider.select((s) => s.selectedDate),
     );
 
-    final timeFiltered = allTransactions.where((ledger) {
-      if (activeFilter == LedgerFilterType.monthly) {
-        return ledger.dateTime.month == selectedDate.month &&
-            ledger.dateTime.year == selectedDate.year;
-      } else if (activeFilter == LedgerFilterType.yearly) {
-        return ledger.dateTime.year == selectedDate.year;
-      }
-      return true;
-    }).toList();
+    // 3️⃣ Unpack the AsyncValue cleanly matching structural layouts
+    return ledgersAsync.when(
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
+      error: (err, stack) => Scaffold(
+        body: Center(child: Text("Error loading transactions: $err")),
+      ),
+      data: (allTransactions) {
+        // Handle global empty state first when no data exists in SQLite or cloud
+        if (allTransactions.isEmpty) {
+          return const _EmptyLedgerState();
+        }
 
-    if (allTransactions.isEmpty) {
-      return const _EmptyLedgerState();
-    }
+        // Apply time filter parameters safely over the raw unpacked Iterable items list
+        final timeFiltered = allTransactions.where((ledger) {
+          if (activeFilter == LedgerFilterType.monthly) {
+            return ledger.dateTime.month == selectedDate.month &&
+                ledger.dateTime.year == selectedDate.year;
+          } else if (activeFilter == LedgerFilterType.yearly) {
+            return ledger.dateTime.year == selectedDate.year;
+          }
+          return true;
+        }).toList();
 
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        _SummaryCard(transactions: timeFiltered),
-        const SizedBox(height: 20),
-        _ChartSection(transactions: timeFiltered),
-        const SizedBox(height: 16),
-        const _FilterToggleSection(),
-        const SizedBox(height: 16),
-        const _HeaderSection(),
-        const SizedBox(height: 12),
-        _TransactionDataTable(timeFiltered: timeFiltered),
-      ],
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            _SummaryCard(transactions: timeFiltered),
+            const SizedBox(height: 20),
+            _ChartSection(transactions: timeFiltered),
+            const SizedBox(height: 16),
+            const _FilterToggleSection(),
+            const SizedBox(height: 16),
+            const _HeaderSection(),
+            const SizedBox(height: 12),
+            _TransactionDataTable(timeFiltered: timeFiltered),
+          ],
+        );
+      },
     );
   }
 }
@@ -79,8 +92,14 @@ class _SummaryCard extends ConsumerWidget {
 
     if (isSelMode) {
       for (var id in selIds) {
-        final t = transactions.firstWhere((e) => e.id == id);
-        sel += t.isIncome ? t.amount : -t.amount;
+        // Prevent crashes if transactions filter bounds changes out from under active checkbox lists
+        final t = transactions.cast<LedgerModel?>().firstWhere(
+          (e) => e?.id == id,
+          orElse: () => null,
+        );
+        if (t != null) {
+          sel += t.isIncome ? t.amount : -t.amount;
+        }
       }
     }
 
@@ -315,7 +334,7 @@ class _HeaderSection extends ConsumerWidget {
     if (isSearching) {
       return TextField(
         onChanged: (v) => ref.read(ledgerUiProvider.notifier).updateSearch(v),
-        autofocus: true, // Focus automatically when search is toggled
+        autofocus: true,
         style: const TextStyle(fontSize: 16),
         decoration: InputDecoration(
           hintText: "Search transactions...",
@@ -336,14 +355,10 @@ class _HeaderSection extends ConsumerWidget {
             horizontal: 16,
             vertical: 12,
           ),
-
-          // Default border (Idle)
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide.none,
           ),
-
-          // Border when user clicks it
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide(
@@ -353,8 +368,6 @@ class _HeaderSection extends ConsumerWidget {
               width: 1.5,
             ),
           ),
-
-          // Border when not focused
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide(
@@ -395,7 +408,6 @@ class _TransactionDataTable extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
 
-    // Selectively watch UI states to prevent unnecessary rebuilds
     final query = ref
         .watch(ledgerUiProvider.select((s) => s.searchQuery))
         .toLowerCase();
@@ -404,7 +416,6 @@ class _TransactionDataTable extends ConsumerWidget {
     );
     final selIds = ref.watch(ledgerUiProvider.select((s) => s.selectedIds));
 
-    // Filter by search query
     final displayList = timeFiltered.where((t) {
       return t.title.toLowerCase().contains(query) ||
           t.category.toLowerCase().contains(query);
@@ -425,7 +436,6 @@ class _TransactionDataTable extends ConsumerWidget {
           fontWeight: FontWeight.bold,
           color: theme.colorScheme.tertiary,
         ),
-        // restored 4 columns
         columns: const [
           DataColumn(label: Text('Date')),
           DataColumn(label: Text('Title')),
@@ -439,10 +449,8 @@ class _TransactionDataTable extends ConsumerWidget {
             selected: isSelected,
             onSelectChanged: (selected) {
               if (isSelMode) {
-                // Use notifier to toggle selection
                 ref.read(ledgerUiProvider.notifier).toggleId(ledger.id!);
               } else {
-                // Normal navigation to Edit
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -460,7 +468,7 @@ class _TransactionDataTable extends ConsumerWidget {
               ),
               DataCell(
                 SizedBox(
-                  width: 80, // Prevent title from pushing amount off screen
+                  width: 80,
                   child: Text(ledger.title, overflow: TextOverflow.ellipsis),
                 ),
               ),
