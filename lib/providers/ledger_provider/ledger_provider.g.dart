@@ -33,7 +33,7 @@ final class LedgerNotifierProvider
   LedgerNotifier create() => LedgerNotifier();
 }
 
-String _$ledgerNotifierHash() => r'0ec94d35302bc4e5f6752750929f973d30fe6104';
+String _$ledgerNotifierHash() => r'c3c684c79f014cd41fbaff786b46f196a9391039';
 
 abstract class _$LedgerNotifier extends $AsyncNotifier<List<LedgerModel>> {
   FutureOr<List<LedgerModel>> build();
@@ -109,7 +109,7 @@ final class SingleLedgerProvider
   }
 }
 
-String _$singleLedgerHash() => r'608fabec0558604bfe29d326496ca91e6037f077';
+String _$singleLedgerHash() => r'46aae20fc74ee11f48a72dcb78ba2da6c035c057';
 
 final class SingleLedgerFamily extends $Family
     with $FunctionalFamilyOverride<FutureOr<LedgerModel>, String> {

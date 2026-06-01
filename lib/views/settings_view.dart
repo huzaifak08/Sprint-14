@@ -29,6 +29,8 @@ class SettingsView extends ConsumerWidget {
 
     final userState = ref.watch(currentUserProvider);
 
+    final appVersionState = ref.watch(appVersionProvider);
+
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
@@ -143,7 +145,14 @@ class SettingsView extends ConsumerWidget {
                 // --- LOGOUT SECTION ---
                 _buildLogoutButton(context, ref, theme),
                 const SizedBox(height: 32),
-                _buildVersionInfo(theme),
+
+                appVersionState.when(
+                  data: (version) {
+                    return _buildVersionInfo(theme, version);
+                  },
+                  error: (error, stackTrace) => SizedBox.shrink(),
+                  loading: () => SizedBox.shrink(),
+                ),
               ],
             );
           },
@@ -359,10 +368,10 @@ class SettingsView extends ConsumerWidget {
     );
   }
 
-  Widget _buildVersionInfo(ThemeData theme) {
+  Widget _buildVersionInfo(ThemeData theme, String version) {
     return Center(
       child: Text(
-        "Sprint14 v1.0.2 • Secure Build",
+        "Sprint14 v$version • Secure Build",
         style: theme.textTheme.bodySmall?.copyWith(
           color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
         ),

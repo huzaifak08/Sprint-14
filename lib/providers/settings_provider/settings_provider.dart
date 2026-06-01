@@ -1,6 +1,7 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:sprint_14/cache/tables/settings_table.dart';
 import 'package:sprint_14/models/app_settings_model.dart';
+import 'package:sprint_14/services/native_info_service.dart';
 part 'settings_provider.g.dart';
 
 @Riverpod(keepAlive: true)
@@ -29,4 +30,9 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
     state = AsyncData(updated);
     await SettingsTable.saveSettings(updated);
   }
+}
+
+@riverpod
+Future<String> appVersion(Ref ref) async {
+  return await NativeInfoService.getAppVersion();
 }

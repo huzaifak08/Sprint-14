@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+// Firestore Collections:
 final String usersCollection = "users";
 final String projectsCollection = "projects";
 final String ledgersCollection = "ledgers";
@@ -13,6 +14,12 @@ const String eventLedgersCollection = "event_ledgers";
 const String eventParticipantsCollection = "event_participants";
 const String transactionsCollection = "event_transactions";
 const String milestonesCollection = "event_settlement_milestones";
+
+// Method Channel:
+const String methodChannel = "flutter_channel";
+
+// Method Channel Methods:
+const String getAppVersionMethod = "getAppVersion";
 
 final String themeKey = "sprint-14-theme";
 
