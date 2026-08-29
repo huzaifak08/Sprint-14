@@ -34,7 +34,7 @@ class LocalCacheManager {
 
     return openDatabase(
       path,
-      version: 17, // Increment version number when schema changes
+      version: 18, // Increment version number when schema changes
       onCreate: (db, version) async {
         // await ProjectTable.createTable(db);
         await LedgerTable.createTable(db);
@@ -104,6 +104,17 @@ class LocalCacheManager {
         }
 
         // New Changes Here:
+        if (oldVersion < 18) {
+          await db.execute(
+            'ALTER TABLE ${EventTransactionTable.tableName} ADD COLUMN isFundDeposit INTEGER NOT NULL DEFAULT 0',
+          );
+          await db.execute(
+            'ALTER TABLE ${EventTransactionTable.tableName} ADD COLUMN paidFromPool INTEGER NOT NULL DEFAULT 0',
+          );
+          dev.log(
+            "v18- Added isFundDeposit and paidFromPool columns to event_transactions",
+          );
+        }
       },
     );
   }

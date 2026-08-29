@@ -27,7 +27,7 @@ class EventLedgerNotifier extends _$EventLedgerNotifier {
     final user = ref.watch(currentUserProvider).value;
     if (user == null) return [];
 
-    // 1. Instantly return local SQLite cache entries
+    // 1. Load from SQLite local cache immediately
     final localCache = await EventLedgerTable.getActiveLedgers();
 
     // 2. Trigger asynchronous background alignment synchronization pass
@@ -48,7 +48,6 @@ class EventLedgerNotifier extends _$EventLedgerNotifier {
       final List<EventLedgerModel> mergedList = [];
       for (final cloudItem in cloudProfiles) {
         final localItem = localMap[cloudItem.id];
-        // Retain un-synced dirty local modifications if background transaction drops offline mid-session
         if (localItem != null && !localItem.isSynced) {
           mergedList.add(localItem);
         } else {
@@ -59,7 +58,6 @@ class EventLedgerNotifier extends _$EventLedgerNotifier {
       await EventLedgerTable.saveAllLedgers(mergedList);
       state = AsyncData(mergedList);
 
-      // Perform upstream clearing of un-synced queue logs
       syncPendingRecordsToCloud();
     } catch (e) {
       dev.log(
@@ -101,12 +99,11 @@ class EventLedgerNotifier extends _$EventLedgerNotifier {
     syncPendingRecordsToCloud();
   }
 
-  /// Master Background Synchronization Queue Loop: Resolves data discrepancies between local SQLite tables and Cloud Firestore.
   Future<void> syncPendingRecordsToCloud() async {
     final connectivity = await Connectivity().checkConnectivity();
     if (connectivity.contains(ConnectivityResult.none)) return;
 
-    // A. Sync Un-synced Ledger Envelopes
+    // A. Sync Ledger Envelopes
     final unsyncedLedgers = await EventLedgerTable.getUnsyncedLedgers();
     for (var ledger in unsyncedLedgers) {
       try {
@@ -130,7 +127,7 @@ class EventLedgerNotifier extends _$EventLedgerNotifier {
       }
     }
 
-    // B. Sync Un-synced Participants
+    // B. Sync Participants
     final unsyncedParticipants =
         await EventParticipantTable.getUnsyncedParticipants();
     for (var p in unsyncedParticipants) {
@@ -154,7 +151,7 @@ class EventLedgerNotifier extends _$EventLedgerNotifier {
       }
     }
 
-    // C. Sync Un-synced Matrix Transactions
+    // C. Sync Transactions
     final unsyncedTransactions =
         await EventTransactionTable.getUnsyncedTransactions();
     for (var tx in unsyncedTransactions) {
@@ -180,18 +177,15 @@ class EventLedgerNotifier extends _$EventLedgerNotifier {
       }
     }
 
-    // D. Sync Settlement Milestone Folders
+    // D. Sync Settlement Milestones
     final unsyncedMilestones =
         await SettlementMilestoneTable.getUnsyncedMilestones();
     for (var ms in unsyncedMilestones) {
       try {
-        // Milestone structural updates are built atomically over batch arrays within service wrappers
-        _service.saveLedger; // Point link trace
         if (ms.isDeleted) {
           await SettlementMilestoneTable.hardDelete(ms.id);
           continue;
         }
-        // If un-synced checkpoints are loaded locally, trigger bulk execution
         final activeTxInMilestone =
             await EventTransactionTable.getTransactionsByMilestone(ms.id);
         final txIds = activeTxInMilestone.map((e) => e.id).toList();
@@ -226,11 +220,9 @@ class ActiveEventTransactions extends _$ActiveEventTransactions {
   FutureOr<List<EventTransactionModel>> build(String eventId) async {
     ref.onDispose(() => _cloudSubscription?.cancel());
 
-    // 1. Load active non-settled entries out from SQLite immediately
     final cachedActiveRows =
         await EventTransactionTable.getActiveEventTransactions(eventId);
 
-    // 2. Attach a live synchronization cloud stream pipeline connection background tracking hook
     _listenToCloudTransactions(eventId);
 
     return cachedActiveRows;
@@ -325,25 +317,33 @@ Future<EventLedgerModel> singleEventLedger(Ref ref, String eventId) async {
   return ledgers.firstWhere((element) => element.id == eventId);
 }
 
-/// Dynamic Roster Dropdown Category Aggregator Lookup Provider.
-/// Pulls unique strings used in existing local transaction categories to feed custom workspace entries.
 @riverpod
 Future<List<String>> dynamicEventCategories(Ref ref, String eventId) async {
-  // Watches active tracking stream list adjustments to trigger update refreshes seamlessly
   await ref.watch(activeEventTransactionsProvider(eventId).future);
   return await EventTransactionTable.getDistinctCategoriesInLedger(eventId);
 }
 
-/// Main Event Ledger Overview Financial State Engine Summary.
-/// Computes balances entirely via high-speed asynchronous mathematical map pipelines.
 class EventFinancialSummary {
-  final double totalGroupSpent;
-  final double yourTotalPaid;
-  final double yourNetBalance;
+  final double totalCollected; // Total Fund Influx / Deposited to Central Pool
+  final double
+  totalGroupSpent; // Total Group Spending (Pool Spends + Out-of-Pocket Spends)
+  final double totalPoolSpent; // Total Spent directly from the Common Pool
+  final double
+  totalOutPocketSpent; // Total Spent directly from personal pockets
+  final double
+  remainingPoolCash; // Total Cash currently remaining in the leader's hands
+  final double
+  yourTotalContributed; // Total money you personally put in (Deposits + Personal Spends)
+  final double
+  yourNetBalance; // Net standing (Positive = You get money back, Negative = You owe)
 
   EventFinancialSummary({
+    required this.totalCollected,
     required this.totalGroupSpent,
-    required this.yourTotalPaid,
+    required this.totalPoolSpent,
+    required this.totalOutPocketSpent,
+    required this.remainingPoolCash,
+    required this.yourTotalContributed,
     required this.yourNetBalance,
   });
 }
@@ -356,13 +356,16 @@ Future<EventFinancialSummary> eventFinancialSummary(
   final authUser = ref.watch(authControllerProvider).value;
   if (authUser == null) {
     return EventFinancialSummary(
+      totalCollected: 0.0,
       totalGroupSpent: 0.0,
-      yourTotalPaid: 0.0,
+      totalPoolSpent: 0.0,
+      totalOutPocketSpent: 0.0,
+      remainingPoolCash: 0.0,
+      yourTotalContributed: 0.0,
       yourNetBalance: 0.0,
     );
   }
 
-  // 1. Await resolution of current active transaction states and ledger membership roles
   final activeTransactions = await ref.watch(
     activeEventTransactionsProvider(eventId).future,
   );
@@ -370,47 +373,71 @@ Future<EventFinancialSummary> eventFinancialSummary(
     eventParticipantsRosterProvider(eventId).future,
   );
 
-  // 2. Track down the current user's participant profile configuration matching key node paths
   final matchingMeProfile = participantRoster
       .cast<EventParticipantModel?>()
       .firstWhere((p) => p?.userId == authUser.uid, orElse: () => null);
 
   if (matchingMeProfile == null) {
     return EventFinancialSummary(
+      totalCollected: 0.0,
       totalGroupSpent: 0.0,
-      yourTotalPaid: 0.0,
+      totalPoolSpent: 0.0,
+      totalOutPocketSpent: 0.0,
+      remainingPoolCash: 0.0,
+      yourTotalContributed: 0.0,
       yourNetBalance: 0.0,
     );
   }
 
   final String clearMyIdKey = matchingMeProfile.id;
 
-  double computedGroupTotalSum = 0.0;
-  double computedAmountPaidByMe = 0.0;
-  double computedMyTotalObligationDebtShare = 0.0;
+  double computedTotalCollected = 0.0;
+  double computedPoolSpent = 0.0;
+  double computedOutPocketSpent = 0.0;
 
-  // 3. Process calculations loop matrix values over all un-settled transaction rows
+  double computedMyTotalDeposits = 0.0;
+  double computedMyOutPocketPaid = 0.0;
+  double computedMyObligationDebtShare = 0.0;
+
   for (var tx in activeTransactions) {
-    computedGroupTotalSum += tx.totalAmount;
+    if (tx.isFundDeposit) {
+      // Flow A: Pool Deposit
+      computedTotalCollected += tx.totalAmount;
+      if (tx.paidById == clearMyIdKey) {
+        computedMyTotalDeposits += tx.totalAmount;
+      }
+    } else {
+      // Flow B: Expense
+      if (tx.paidFromPool) {
+        computedPoolSpent += tx.totalAmount;
+      } else {
+        computedOutPocketSpent += tx.totalAmount;
+        if (tx.paidById == clearMyIdKey) {
+          computedMyOutPocketPaid += tx.totalAmount;
+        }
+      }
 
-    if (tx.paidById == clearMyIdKey) {
-      computedAmountPaidByMe += tx.totalAmount;
-    }
-
-    // Accumulate exact share values logged against our specific participant mapping keys
-    if (tx.splitDetails.containsKey(clearMyIdKey)) {
-      computedMyTotalObligationDebtShare +=
-          tx.splitDetails[clearMyIdKey] ?? 0.0;
+      // Tally consumed split shares
+      if (tx.splitDetails.containsKey(clearMyIdKey)) {
+        computedMyObligationDebtShare += tx.splitDetails[clearMyIdKey] ?? 0.0;
+      }
     }
   }
 
-  // Net Standing Matrix: Total Invested Out-Of-Pocket minus Total Cost Consumed Obligation
-  final double finalNetBalanceCalculated =
-      computedAmountPaidByMe - computedMyTotalObligationDebtShare;
+  final double totalGroupSpent = computedPoolSpent + computedOutPocketSpent;
+  final double remainingPoolCash = computedTotalCollected - computedPoolSpent;
+  final double yourTotalContributed =
+      computedMyTotalDeposits + computedMyOutPocketPaid;
+  final double yourNetBalance =
+      yourTotalContributed - computedMyObligationDebtShare;
 
   return EventFinancialSummary(
-    totalGroupSpent: computedGroupTotalSum,
-    yourTotalPaid: computedAmountPaidByMe,
-    yourNetBalance: finalNetBalanceCalculated,
+    totalCollected: computedTotalCollected,
+    totalGroupSpent: totalGroupSpent,
+    totalPoolSpent: computedPoolSpent,
+    totalOutPocketSpent: computedOutPocketSpent,
+    remainingPoolCash: remainingPoolCash,
+    yourTotalContributed: yourTotalContributed,
+    yourNetBalance: yourNetBalance,
   );
 }

@@ -4,20 +4,15 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class EventTransactionModel {
   final String id;
   final String eventId;
-  final String paidById; // References unique EventParticipantModel ID string
+  final String paidById;
   final double totalAmount;
   final String description;
-  final String category; // 'food', 'utilities', or custom locally added strings
+  final String category;
   final DateTime transactionDate;
-  final String?
-  milestoneId; // Linked if it passes a calculation freeze checkout pass
-
-  /// Matrix layout tracking split profiles. Maps participant ID to their numeric cost obligation.
-  /// Example structural configuration inside Firestore or SQLite fields:
-  /// `{"participant_id_1": 450.00, "participant_id_2": 0.00}`
+  final String? milestoneId;
   final Map<String, double> splitDetails;
-
-  // 🔁 Sync fields (LOCAL ONLY)
+  final bool isFundDeposit;
+  final bool paidFromPool;
   final bool isSynced;
   final bool isDeleted;
   final DateTime? lastSyncAttempt;
@@ -32,12 +27,13 @@ class EventTransactionModel {
     required this.transactionDate,
     this.milestoneId,
     required this.splitDetails,
+    this.isFundDeposit = false,
+    this.paidFromPool = false,
     required this.isSynced,
     this.isDeleted = false,
     this.lastSyncAttempt,
   });
 
-  // ===================== copyWith =====================
   EventTransactionModel copyWith({
     String? id,
     String? eventId,
@@ -48,6 +44,8 @@ class EventTransactionModel {
     DateTime? transactionDate,
     String? milestoneId,
     Map<String, double>? splitDetails,
+    bool? isFundDeposit,
+    bool? paidFromPool,
     bool? isSynced,
     bool? isDeleted,
     DateTime? lastSyncAttempt,
@@ -62,13 +60,14 @@ class EventTransactionModel {
       transactionDate: transactionDate ?? this.transactionDate,
       milestoneId: milestoneId ?? this.milestoneId,
       splitDetails: splitDetails ?? this.splitDetails,
+      isFundDeposit: isFundDeposit ?? this.isFundDeposit,
+      paidFromPool: paidFromPool ?? this.paidFromPool,
       isSynced: isSynced ?? this.isSynced,
       isDeleted: isDeleted ?? this.isDeleted,
       lastSyncAttempt: lastSyncAttempt ?? this.lastSyncAttempt,
     );
   }
 
-  // ===================== FIRESTORE =====================
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -80,11 +79,12 @@ class EventTransactionModel {
       'transactionDate': Timestamp.fromDate(transactionDate),
       'milestoneId': milestoneId,
       'splitDetails': splitDetails,
+      'isFundDeposit': isFundDeposit,
+      'paidFromPool': paidFromPool,
     };
   }
 
   factory EventTransactionModel.fromMap(Map<String, dynamic> map) {
-    // Dynamic cast safely into nested maps to prevent casting issues from Firestore maps
     final rawSplits = map['splitDetails'] as Map<String, dynamic>? ?? const {};
     final Map<String, double> castedSplits = rawSplits.map(
       (key, value) => MapEntry(key, (value is num) ? value.toDouble() : 0.0),
@@ -104,13 +104,14 @@ class EventTransactionModel {
           : DateTime.now(),
       milestoneId: map['milestoneId'] as String?,
       splitDetails: castedSplits,
+      isFundDeposit: map['isFundDeposit'] ?? false,
+      paidFromPool: map['paidFromPool'] ?? false,
       isSynced: true,
       isDeleted: false,
       lastSyncAttempt: null,
     );
   }
 
-  // ===================== LOCAL DB (CACHE) =====================
   Map<String, dynamic> toJsonDb() {
     return {
       'id': id,
@@ -122,6 +123,8 @@ class EventTransactionModel {
       'transactionDate': transactionDate.toIso8601String(),
       'milestoneId': milestoneId,
       'splitDetails': json.encode(splitDetails),
+      'isFundDeposit': isFundDeposit ? 1 : 0,
+      'paidFromPool': paidFromPool ? 1 : 0,
       'isSynced': isSynced ? 1 : 0,
       'isDeleted': isDeleted ? 1 : 0,
       'lastSyncAttempt': lastSyncAttempt?.toIso8601String(),
@@ -149,6 +152,8 @@ class EventTransactionModel {
       transactionDate: DateTime.parse(jsonMap['transactionDate']),
       milestoneId: jsonMap['milestoneId'] as String?,
       splitDetails: castedSplits,
+      isFundDeposit: (jsonMap['isFundDeposit'] ?? 0) == 1,
+      paidFromPool: (jsonMap['paidFromPool'] ?? 0) == 1,
       isSynced: (jsonMap['isSynced'] ?? 0) == 1,
       isDeleted: (jsonMap['isDeleted'] ?? 0) == 1,
       lastSyncAttempt: jsonMap['lastSyncAttempt'] != null
@@ -157,13 +162,11 @@ class EventTransactionModel {
     );
   }
 
-  // ===================== JSON HELPERS =====================
   String toJson() => json.encode(toJsonDb());
 
   factory EventTransactionModel.fromJson(String source) =>
       EventTransactionModel.fromJsonDb(json.decode(source));
 
-  // ===================== Equality =====================
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
@@ -176,6 +179,8 @@ class EventTransactionModel {
         other.category == category &&
         other.transactionDate == transactionDate &&
         other.milestoneId == milestoneId &&
+        other.isFundDeposit == isFundDeposit &&
+        other.paidFromPool == paidFromPool &&
         other.isSynced == isSynced &&
         other.isDeleted == isDeleted &&
         other.lastSyncAttempt == lastSyncAttempt;
@@ -191,6 +196,8 @@ class EventTransactionModel {
         category.hashCode ^
         transactionDate.hashCode ^
         milestoneId.hashCode ^
+        isFundDeposit.hashCode ^
+        paidFromPool.hashCode ^
         isSynced.hashCode ^
         isDeleted.hashCode ^
         lastSyncAttempt.hashCode;
@@ -198,6 +205,6 @@ class EventTransactionModel {
 
   @override
   String toString() {
-    return 'EventTransactionModel(id: $id, amount: $totalAmount, category: $category, isSynced: $isSynced)';
+    return 'EventTransactionModel(id: $id, amount: $totalAmount, category: $category, isFundDeposit: $isFundDeposit, paidFromPool: $paidFromPool, isSynced: $isSynced)';
   }
 }

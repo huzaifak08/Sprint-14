@@ -65,6 +65,7 @@ class _EventLedgersDashboardViewState
           padding: const EdgeInsets.symmetric(horizontal: 16),
           children: [
             const SizedBox(height: 8),
+            // Master Financial Summary Card
             summaryAsync.when(
               data: (summary) => _buildMetricsCard(theme, summary),
               loading: () => const Center(
@@ -103,7 +104,7 @@ class _EventLedgersDashboardViewState
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         icon: const Icon(Icons.add_card_rounded),
         label: const Text(
-          "Log Split",
+          "Log Entry",
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         onPressed: () => _showLogSplitBottomSheet(context),
@@ -142,14 +143,23 @@ class _EventLedgersDashboardViewState
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               _buildMetricItem(
-                "Group Total Spent",
-                summary.totalGroupSpent.toStringAsFixed(0),
-                theme.colorScheme.onSecondary,
+                "Total Collected",
+                summary.totalCollected.toStringAsFixed(0),
+                theme.colorScheme.primary,
               ),
               _buildMetricItem(
-                "Your Contributions",
-                summary.yourTotalPaid.toStringAsFixed(0),
-                theme.colorScheme.primary,
+                "Pool Cash Left",
+                summary.remainingPoolCash.toStringAsFixed(0),
+                summary.remainingPoolCash >= 0
+                    ? (theme.brightness == Brightness.light
+                          ? const Color(0xFF00C853)
+                          : const Color(0xFF00E676))
+                    : theme.colorScheme.error,
+              ),
+              _buildMetricItem(
+                "Group Spent",
+                summary.totalGroupSpent.toStringAsFixed(0),
+                theme.colorScheme.onSecondary,
               ),
             ],
           ),
@@ -176,11 +186,21 @@ class _EventLedgersDashboardViewState
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    isOwed ? "You are owed money" : "You owe money",
+                    isOwed ? "You are owed back" : "You owe the group",
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
-                      color: balanceColor.withValues(alpha: 0.8),
+                      color: balanceColor.withValues(alpha: 0.9),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    "Contributed: ${summary.yourTotalContributed.toStringAsFixed(0)}",
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: theme.colorScheme.onSecondary.withValues(
+                        alpha: 0.5,
+                      ),
                     ),
                   ),
                 ],
@@ -188,7 +208,7 @@ class _EventLedgersDashboardViewState
               Text(
                 "${isOwed ? '+' : ''}${summary.yourNetBalance.toStringAsFixed(0)}",
                 style: TextStyle(
-                  fontSize: 28,
+                  fontSize: 26,
                   fontWeight: FontWeight.w900,
                   color: balanceColor,
                   letterSpacing: -0.5,
@@ -210,7 +230,7 @@ class _EventLedgersDashboardViewState
           style: TextStyle(
             fontSize: 9,
             fontWeight: FontWeight.w900,
-            letterSpacing: 0.8,
+            letterSpacing: 0.6,
             color: numColor.withValues(alpha: 0.6),
           ),
         ),
@@ -218,7 +238,7 @@ class _EventLedgersDashboardViewState
         Text(
           rawNumber,
           style: TextStyle(
-            fontSize: 20,
+            fontSize: 18,
             fontWeight: FontWeight.w900,
             color: numColor,
             letterSpacing: -0.5,
@@ -285,7 +305,7 @@ class _EventLedgersDashboardViewState
 }
 
 // =========================================================================
-// ISOLATED LIST CONSUMER (With contextual item menu interactions)
+// ISOLATED TRANSACTION FEED SUB-LIST
 // =========================================================================
 class _TransactionsSubList extends ConsumerWidget {
   final String eventId;
@@ -294,11 +314,16 @@ class _TransactionsSubList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final txAsync = ref.watch(activeEventTransactionsProvider(eventId));
+    final participants =
+        ref.watch(eventParticipantsRosterProvider(eventId)).value ?? [];
     final theme = Theme.of(context);
 
     return txAsync.when(
       data: (transactions) {
-        if (transactions.isEmpty) {
+        final sortedTransactions = [...transactions]
+          ..sort((a, b) => b.transactionDate.compareTo(a.transactionDate));
+
+        if (sortedTransactions.isEmpty) {
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(40),
@@ -314,10 +339,40 @@ class _TransactionsSubList extends ConsumerWidget {
         return ListView.separated(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: transactions.length,
+          itemCount: sortedTransactions.length,
           separatorBuilder: (_, _) => const SizedBox(height: 10),
           itemBuilder: (context, index) {
-            final tx = transactions[index];
+            final tx = sortedTransactions[index];
+            final payerName =
+                participants
+                    .cast<EventParticipantModel?>()
+                    .firstWhere((p) => p?.id == tx.paidById, orElse: () => null)
+                    ?.displayName ??
+                "Unknown";
+
+            final bool isDeposit = tx.isFundDeposit;
+            final Color badgeBg = isDeposit
+                ? (theme.brightness == Brightness.light
+                      ? const Color(0xFF00C853).withValues(alpha: 0.12)
+                      : const Color(0xFF00E676).withValues(alpha: 0.15))
+                : (tx.paidFromPool
+                      ? theme.colorScheme.primary.withValues(alpha: 0.1)
+                      : theme.colorScheme.tertiary.withValues(alpha: 0.12));
+
+            final Color badgeText = isDeposit
+                ? (theme.brightness == Brightness.light
+                      ? const Color(0xFF00C853)
+                      : const Color(0xFF00E676))
+                : (tx.paidFromPool
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.tertiary);
+
+            final IconData leadingIcon = isDeposit
+                ? Icons.savings_outlined
+                : (tx.paidFromPool
+                      ? Icons.account_balance_wallet_outlined
+                      : Icons.person_outline_rounded);
+
             return Dismissible(
               key: Key(tx.id),
               direction: DismissDirection.endToStart,
@@ -338,65 +393,97 @@ class _TransactionsSubList extends ConsumerWidget {
                     .read(activeEventTransactionsProvider(eventId).notifier)
                     .deleteTransaction(tx.id);
               },
-              child: Container(
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surface,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: ListTile(
-                  onTap: () => _showTransactionContextOptions(
-                    context,
-                    ref,
-                    tx,
-                  ), // 🔥 Tap to Edit/Delete
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 4,
-                  ),
-                  leading: CircleAvatar(
-                    backgroundColor: theme.colorScheme.primary.withValues(
-                      alpha: 0.1,
-                    ),
-                    child: Icon(
-                      Icons.receipt_long_rounded,
-                      color: theme.colorScheme.primary,
+              child: Material(
+                color: theme.colorScheme.surface,
+                borderRadius: BorderRadius.circular(16),
+                clipBehavior: Clip.antiAlias,
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: theme.colorScheme.primary.withValues(alpha: 0.08),
                     ),
                   ),
-                  title: Text(
-                    tx.description,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
+                  child: ListTile(
+                    onTap: () =>
+                        _showTransactionContextOptions(context, ref, tx),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 4,
                     ),
-                  ),
-                  subtitle: Text(
-                    tx.category.toUpperCase(),
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.primary,
-                      letterSpacing: 0.5,
+                    leading: CircleAvatar(
+                      backgroundColor: badgeBg,
+                      child: Icon(leadingIcon, color: badgeText),
                     ),
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        tx.totalAmount.toStringAsFixed(0),
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                          color: theme.colorScheme.onSecondary,
-                        ),
+                    title: Text(
+                      tx.description,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
                       ),
-                      const SizedBox(width: 4),
-                      Icon(
-                        Icons.chevron_right_rounded,
-                        color: theme.colorScheme.onSecondary.withValues(
-                          alpha: 0.2,
+                    ),
+                    subtitle: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: badgeBg,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            isDeposit
+                                ? "DEPOSIT"
+                                : (tx.paidFromPool
+                                      ? "FROM POOL"
+                                      : "OUT-OF-POCKET"),
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w900,
+                              color: badgeText,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            isDeposit ? "by $payerName" : "• $payerName",
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: theme.colorScheme.onSecondary.withValues(
+                                alpha: 0.5,
+                              ),
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          "${isDeposit ? '+' : ''}${tx.totalAmount.toStringAsFixed(0)}",
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w900,
+                            color: isDeposit
+                                ? badgeText
+                                : theme.colorScheme.onSecondary,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          color: theme.colorScheme.onSecondary.withValues(
+                            alpha: 0.2,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -484,7 +571,7 @@ class _TransactionsSubList extends ConsumerWidget {
 }
 
 // =========================================================================
-// MULTI-USER / GUEST ROSTER ONBOARDING SHEET
+// ADD PARTICIPANT MODAL SHEET
 // =========================================================================
 class _AddParticipantSheet extends ConsumerStatefulWidget {
   final String eventId;
@@ -521,7 +608,7 @@ class _AddParticipantSheetState extends ConsumerState<_AddParticipantSheet> {
             controller: _nameController,
             decoration: InputDecoration(
               labelText: "Participant Name",
-              hintText: "Enter manual name or linked handle...",
+              hintText: "Enter name...",
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -571,12 +658,11 @@ class _AddParticipantSheetState extends ConsumerState<_AddParticipantSheet> {
 }
 
 // =========================================================================
-// LOG SPLIT BOTTOM SHEET WITH CACHED CUSTOM CATEGORY INJECTION & EDIT STATE
+// LOG ENTRY SHEET: DUAL-FLOW (COLLECTION / SPENDING)
 // =========================================================================
 class _LogSplitSheet extends ConsumerStatefulWidget {
   final String eventId;
-  final EventTransactionModel?
-  existingTransaction; // 🔥 Receives existing data if editing
+  final EventTransactionModel? existingTransaction;
 
   const _LogSplitSheet({required this.eventId, this.existingTransaction});
 
@@ -589,10 +675,14 @@ class _LogSplitSheetState extends ConsumerState<_LogSplitSheet> {
   final _descController = TextEditingController();
   final _customCategoryController = TextEditingController();
 
-  String _selectedCategory = "Food";
-  String? _selectedPayerId;
+  // Dual-Flow Toggles
+  bool _isDepositMode = false; // true = Pool Influx / Contribution
+  bool _isPaidFromPool = true; // true = Cash taken from Common Pool
   bool _isCustomCategoryActive = false;
   bool _isEditMode = false;
+
+  String _selectedCategory = "Food";
+  String? _selectedPayerId;
 
   final List<String> _basePresets = ["Food", "Transport", "Rent", "Utilities"];
 
@@ -600,21 +690,20 @@ class _LogSplitSheetState extends ConsumerState<_LogSplitSheet> {
   void initState() {
     super.initState();
     if (widget.existingTransaction != null) {
+      final tx = widget.existingTransaction!;
       _isEditMode = true;
-      _amountController.text = widget.existingTransaction!.totalAmount
-          .toStringAsFixed(0);
-      _descController.text = widget.existingTransaction!.description;
-      _selectedPayerId = widget.existingTransaction!.paidById;
+      _amountController.text = tx.totalAmount.toStringAsFixed(0);
+      _descController.text = tx.description;
+      _selectedPayerId = tx.paidById;
+      _isDepositMode = tx.isFundDeposit;
+      _isPaidFromPool = tx.paidFromPool;
 
-      final bool matchesPreset = _basePresets.contains(
-        widget.existingTransaction!.category,
-      );
-      if (matchesPreset) {
-        _selectedCategory = widget.existingTransaction!.category;
+      if (_basePresets.contains(tx.category)) {
+        _selectedCategory = tx.category;
         _isCustomCategoryActive = false;
       } else {
         _isCustomCategoryActive = true;
-        _customCategoryController.text = widget.existingTransaction!.category;
+        _customCategoryController.text = tx.category;
       }
     }
   }
@@ -648,9 +737,47 @@ class _LogSplitSheetState extends ConsumerState<_LogSplitSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            _isEditMode ? "Modify Split Record" : "Log Split Transaction",
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                _isEditMode
+                    ? "Modify Entry"
+                    : (_isDepositMode ? "Collect Pool Cash" : "Log Expense"),
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              // Main Mode Segmented Switch
+              SegmentedButton<bool>(
+                segments: const [
+                  ButtonSegment(
+                    value: false,
+                    label: Text("Expense", style: TextStyle(fontSize: 11)),
+                    icon: Icon(Icons.outbox_rounded, size: 14),
+                  ),
+                  ButtonSegment(
+                    value: true,
+                    label: Text("Collect", style: TextStyle(fontSize: 11)),
+                    icon: Icon(Icons.savings_rounded, size: 14),
+                  ),
+                ],
+                selected: {_isDepositMode},
+                onSelectionChanged: (val) {
+                  setState(() {
+                    _isDepositMode = val.first;
+                    if (_isDepositMode) {
+                      _isPaidFromPool = false;
+                    }
+                  });
+                },
+                style: ButtonStyle(
+                  visualDensity: VisualDensity.compact,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           Row(
@@ -665,7 +792,7 @@ class _LogSplitSheetState extends ConsumerState<_LogSplitSheet> {
                     fontWeight: FontWeight.bold,
                   ),
                   decoration: InputDecoration(
-                    labelText: "Number Value",
+                    labelText: "Amount",
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -675,50 +802,85 @@ class _LogSplitSheetState extends ConsumerState<_LogSplitSheet> {
               const SizedBox(width: 12),
               Expanded(
                 flex: 5,
-                child: _isCustomCategoryActive
-                    ? TextField(
-                        controller: _customCategoryController,
-                        decoration: InputDecoration(
-                          labelText: "Custom Label",
-                          suffixIcon: IconButton(
-                            icon: const Icon(Icons.cancel),
-                            onPressed: () =>
-                                setState(() => _isCustomCategoryActive = false),
+                child: _isDepositMode
+                    ? Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 16,
+                        ),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary.withValues(
+                            alpha: 0.08,
                           ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: theme.colorScheme.primary.withValues(
+                              alpha: 0.2,
+                            ),
+                          ),
+                        ),
+                        child: Text(
+                          "POOL CONTRIBUTION",
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            color: theme.colorScheme.primary,
+                            letterSpacing: 0.5,
                           ),
                         ),
                       )
-                    : DropdownButtonFormField<String>(
-                        initialValue: allCategories.contains(_selectedCategory)
-                            ? _selectedCategory
-                            : allCategories.first,
-                        decoration: InputDecoration(
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        items: [
-                          ...allCategories.map(
-                            (c) => DropdownMenuItem(value: c, child: Text(c)),
-                          ),
-                          const DropdownMenuItem(
-                            value: "ADD_NEW_HOOK",
-                            child: Text(
-                              "+ Add Custom",
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ],
-                        onChanged: (val) {
-                          if (val == "ADD_NEW_HOOK") {
-                            setState(() => _isCustomCategoryActive = true);
-                          } else if (val != null) {
-                            setState(() => _selectedCategory = val);
-                          }
-                        },
-                      ),
+                    : (_isCustomCategoryActive
+                          ? TextField(
+                              controller: _customCategoryController,
+                              decoration: InputDecoration(
+                                labelText: "Custom Label",
+                                suffixIcon: IconButton(
+                                  icon: const Icon(Icons.cancel),
+                                  onPressed: () => setState(
+                                    () => _isCustomCategoryActive = false,
+                                  ),
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            )
+                          : DropdownButtonFormField<String>(
+                              value: allCategories.contains(_selectedCategory)
+                                  ? _selectedCategory
+                                  : allCategories.first,
+                              decoration: InputDecoration(
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              items: [
+                                ...allCategories.map(
+                                  (c) => DropdownMenuItem(
+                                    value: c,
+                                    child: Text(c),
+                                  ),
+                                ),
+                                const DropdownMenuItem(
+                                  value: "ADD_NEW_HOOK",
+                                  child: Text(
+                                    "+ Add Custom",
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              onChanged: (val) {
+                                if (val == "ADD_NEW_HOOK") {
+                                  setState(
+                                    () => _isCustomCategoryActive = true,
+                                  );
+                                } else if (val != null) {
+                                  setState(() => _selectedCategory = val);
+                                }
+                              },
+                            )),
               ),
             ],
           ),
@@ -726,18 +888,63 @@ class _LogSplitSheetState extends ConsumerState<_LogSplitSheet> {
           TextField(
             controller: _descController,
             decoration: InputDecoration(
-              labelText: "What was this for?",
+              labelText: _isDepositMode
+                  ? "Deposit Note (e.g., Round 1 Contribution)"
+                  : "What was this for?",
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
           ),
           const SizedBox(height: 12),
-          if (participants.isNotEmpty)
+          // Expense Source Selection
+          if (!_isDepositMode) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest.withValues(
+                  alpha: 0.3,
+                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    _isPaidFromPool
+                        ? Icons.account_balance_wallet_rounded
+                        : Icons.account_circle_rounded,
+                    size: 20,
+                    color: theme.colorScheme.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _isPaidFromPool
+                          ? "Paid from Common Pool (Fund)"
+                          : "Paid by Individual (Out-of-Pocket)",
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  Switch(
+                    value: _isPaidFromPool,
+                    onChanged: (val) => setState(() => _isPaidFromPool = val),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+          // Payer Dropdown
+          if (participants.isNotEmpty && (!_isPaidFromPool || _isDepositMode))
             DropdownButtonFormField<String>(
-              initialValue: _selectedPayerId,
+              value: _selectedPayerId,
               decoration: InputDecoration(
-                labelText: "Who Paid Out-of-Pocket?",
+                labelText: _isDepositMode
+                    ? "Who Contributed?"
+                    : "Who Paid from Pocket?",
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -768,40 +975,50 @@ class _LogSplitSheetState extends ConsumerState<_LogSplitSheet> {
                   _amountController.text,
                 );
                 if (parsedAmount == null ||
-                    _descController.text.isEmpty ||
-                    _selectedPayerId == null) {
+                    _descController.text.trim().isEmpty ||
+                    participants.isEmpty) {
                   return;
                 }
 
-                final String finalCategoryValue = _isCustomCategoryActive
-                    ? _customCategoryController.text.trim()
-                    : _selectedCategory;
+                final effectivePayerId = _isPaidFromPool
+                    ? "COMMON_POOL"
+                    : (_selectedPayerId ?? participants.first.id);
+
+                final String finalCategoryValue = _isDepositMode
+                    ? "Deposit"
+                    : (_isCustomCategoryActive
+                          ? _customCategoryController.text.trim()
+                          : _selectedCategory);
+
                 if (finalCategoryValue.isEmpty) return;
 
-                // EQUAL SPLIT MATRIX GENERATOR ENGINE
-                final double sharedCostSlice =
-                    parsedAmount / participants.length;
-                final Map<String, double> equalSplitDetailsMatrix = {
-                  for (final p in participants) p.id: sharedCostSlice,
-                };
+                // Split Equal Matrix Computation
+                final Map<String, double> splitMatrix = {};
+                if (!_isDepositMode) {
+                  final double sharedSlice = parsedAmount / participants.length;
+                  for (final p in participants) {
+                    splitMatrix[p.id] = sharedSlice;
+                  }
+                }
 
                 final transactionModel = EventTransactionModel(
                   id: _isEditMode
                       ? widget.existingTransaction!.id
                       : const Uuid().v4(),
                   eventId: widget.eventId,
-                  paidById: _selectedPayerId!,
+                  paidById: effectivePayerId,
                   totalAmount: parsedAmount,
                   description: _descController.text.trim(),
                   category: finalCategoryValue,
                   transactionDate: _isEditMode
                       ? widget.existingTransaction!.transactionDate
                       : DateTime.now(),
-                  splitDetails: equalSplitDetailsMatrix,
+                  splitDetails: splitMatrix,
+                  isFundDeposit: _isDepositMode,
+                  paidFromPool: _isPaidFromPool,
                   isSynced: false,
                 );
 
-                // Riverpod's state updates are handled downstream via addTransaction (using standard upsert logic)
                 ref
                     .read(
                       activeEventTransactionsProvider(widget.eventId).notifier,
@@ -810,7 +1027,9 @@ class _LogSplitSheetState extends ConsumerState<_LogSplitSheet> {
                 Navigator.pop(context);
               },
               child: Text(
-                _isEditMode ? "Save Adjustments" : "Save & Distribute",
+                _isEditMode
+                    ? "Save Changes"
+                    : (_isDepositMode ? "Add to Pool" : "Save & Distribute"),
                 style: TextStyle(
                   color: theme.colorScheme.onPrimary,
                   fontWeight: FontWeight.bold,

@@ -17,6 +17,8 @@ class EventTransactionTable {
         transactionDate TEXT NOT NULL,
         milestoneId TEXT,
         splitDetails TEXT NOT NULL,
+        isFundDeposit INTEGER NOT NULL,
+        paidFromPool INTEGER NOT NULL,
         isSynced INTEGER NOT NULL,
         isDeleted INTEGER NOT NULL,
         lastSyncAttempt TEXT
@@ -50,7 +52,6 @@ class EventTransactionTable {
     await batch.commit(noResult: true);
   }
 
-  /// Fetches ONLY the active transactions for an event that haven't been bundled into a settlement milestone yet
   static Future<List<EventTransactionModel>> getActiveEventTransactions(
     String eventId,
   ) async {
@@ -64,7 +65,6 @@ class EventTransactionTable {
     return maps.map(EventTransactionModel.fromJsonDb).toList();
   }
 
-  /// Fetches historically settled transactions linked to a specific checkpoint milestone
   static Future<List<EventTransactionModel>> getTransactionsByMilestone(
     String milestoneId,
   ) async {
@@ -77,14 +77,13 @@ class EventTransactionTable {
     return maps.map(EventTransactionModel.fromJsonDb).toList();
   }
 
-  /// High-efficiency lookups for dynamically loading existing categories used inside this ledger
   static Future<List<String>> getDistinctCategoriesInLedger(
     String eventId,
   ) async {
     final db = await LocalCacheManager.getDatabase();
     final List<Map<String, dynamic>> maps = await db.rawQuery(
-      'SELECT DISTINCT category FROM $tableName WHERE eventId = ? AND isDeleted = ?',
-      [eventId, 0],
+      'SELECT DISTINCT category FROM $tableName WHERE eventId = ? AND isDeleted = ? AND isFundDeposit = ?',
+      [eventId, 0, 0],
     );
     return maps.map((row) => row['category'] as String).toList();
   }
