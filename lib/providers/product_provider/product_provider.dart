@@ -153,15 +153,15 @@ class ProductNotifier extends _$ProductNotifier {
           if (success) await ProductTable.hardDelete(p.id);
         } else {
           success = await service.saveProduct(product: p);
-          if (success) {
-            final synced = p.copyWith(isSynced: true);
-            await ProductTable.saveSingleProduct(synced);
-
-            // Update UI sync status
+          if (success &&
+              await LocalCacheManager.markSyncedIfUnchanged(
+                ProductTable.tableName,
+                p.toJsonDb(),
+              )) {
             final current = state.value ?? [];
             state = AsyncData([
               for (final item in current)
-                if (item.id == synced.id) synced else item,
+                if (item.id == p.id) item.copyWith(isSynced: true) else item,
             ]);
           }
         }

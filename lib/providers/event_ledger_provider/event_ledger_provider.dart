@@ -108,7 +108,57 @@ class EventLedgerNotifier extends _$EventLedgerNotifier {
       current.where((element) => element.id != ledgerId).toList(),
     );
     await EventLedgerTable.saveSingleLedger(deletedMarker);
+
+    // Cascade: mark the event's members, transactions (incl. settled ones)
+    // and milestones deleted too, so the sync removes them from the cloud
+    // instead of leaving orphaned documents behind.
+    await _markEventChildrenDeleted(ledgerId);
+
     syncPendingRecordsToCloud();
+  }
+
+  Future<void> _markEventChildrenDeleted(String eventId) async {
+    final participants = await LocalCacheManager.queryAllRows(
+      EventParticipantTable.tableName,
+      where: 'eventId = ?',
+      whereArgs: [eventId],
+    );
+    for (final row in participants) {
+      await EventParticipantTable.saveParticipant(
+        EventParticipantModel.fromJsonDb(
+          row,
+        ).copyWith(isDeleted: true, isSynced: false),
+      );
+    }
+
+    final transactions = await LocalCacheManager.queryAllRows(
+      EventTransactionTable.tableName,
+      where: 'eventId = ?',
+      whereArgs: [eventId],
+    );
+    for (final row in transactions) {
+      await EventTransactionTable.saveSingleTransaction(
+        EventTransactionModel.fromJsonDb(
+          row,
+        ).copyWith(isDeleted: true, isSynced: false),
+      );
+    }
+
+    final milestones = await SettlementMilestoneTable.getMilestonesByEvent(
+      eventId,
+    );
+    for (final ms in milestones) {
+      await SettlementMilestoneTable.saveSingleMilestone(
+        ms.copyWith(isDeleted: true, isSynced: false),
+      );
+    }
+  }
+
+  /// Pull-to-refresh: upload pending changes, then re-fetch from the cloud.
+  Future<void> forceRefresh() async {
+    final user = ref.read(currentUserProvider).value;
+    if (user == null) return;
+    await _syncLedgerEnvelopesFromCloud(user.uid);
   }
 
   /// Serialised with [SyncLock]: the transaction and participant providers
@@ -131,10 +181,16 @@ class EventLedgerNotifier extends _$EventLedgerNotifier {
         }
 
         final success = await _service.saveLedger(ledger: ledger);
-        if (success) {
-          await EventLedgerTable.saveSingleLedger(
-            ledger.copyWith(isSynced: true, lastSyncAttempt: DateTime.now()),
-          );
+        if (success &&
+            await LocalCacheManager.markSyncedIfUnchanged(
+              EventLedgerTable.tableName,
+              ledger.toJsonDb(),
+            )) {
+          // Clear the "not synced" icon on the events list.
+          state = AsyncData([
+            for (final l in state.value ?? <EventLedgerModel>[])
+              if (l.id == ledger.id) l.copyWith(isSynced: true) else l,
+          ]);
         }
       } catch (e) {
         dev.log(
@@ -155,10 +211,15 @@ class EventLedgerNotifier extends _$EventLedgerNotifier {
           continue;
         }
         final success = await _service.saveParticipant(participant: p);
-        if (success) {
-          await EventParticipantTable.saveParticipant(
-            p.copyWith(isSynced: true, lastSyncAttempt: DateTime.now()),
-          );
+        if (success &&
+            await LocalCacheManager.markSyncedIfUnchanged(
+              EventParticipantTable.tableName,
+              p.toJsonDb(),
+            )) {
+          final roster = eventParticipantsRosterProvider(p.eventId);
+          if (ref.exists(roster)) {
+            ref.read(roster.notifier).markSynced({p.id});
+          }
         }
       } catch (e) {
         dev.log(
@@ -181,10 +242,18 @@ class EventLedgerNotifier extends _$EventLedgerNotifier {
           continue;
         }
         final success = await _service.saveTransaction(transaction: tx);
-        if (success) {
-          await EventTransactionTable.saveSingleTransaction(
-            tx.copyWith(isSynced: true, lastSyncAttempt: DateTime.now()),
-          );
+        if (success &&
+            await LocalCacheManager.markSyncedIfUnchanged(
+              EventTransactionTable.tableName,
+              tx.toJsonDb(),
+            )) {
+          // The Firestore stream doesn't re-emit when only the server ack
+          // arrives, so update the open dashboard's list directly; this is
+          // what left the "not synced" icon stuck on the newest entry.
+          final feed = activeEventTransactionsProvider(tx.eventId);
+          if (ref.exists(feed)) {
+            ref.read(feed.notifier).markSynced({tx.id});
+          }
         }
       } catch (e) {
         dev.log(
@@ -288,6 +357,50 @@ class ActiveEventTransactions extends _$ActiveEventTransactions {
     ref.read(eventLedgerProvider.notifier).syncPendingRecordsToCloud();
   }
 
+  /// Flips the sync flag on items already shown (keeps their current data).
+  void markSynced(Set<String> ids) {
+    final current = state.value;
+    if (current == null) return;
+    state = AsyncData([
+      for (final t in current)
+        if (ids.contains(t.id)) t.copyWith(isSynced: true) else t,
+    ]);
+  }
+
+  /// Adds several transactions at once (e.g. a pool deposit from several
+  /// members): one state update and one sync run.
+  Future<void> addTransactions(List<EventTransactionModel> transactions) async {
+    if (transactions.isEmpty) return;
+    final locals = [
+      for (final t in transactions)
+        t.copyWith(isSynced: false, isDeleted: false),
+    ];
+    state = AsyncData([...locals, ...(state.value ?? [])]);
+    for (final t in locals) {
+      await EventTransactionTable.saveSingleTransaction(t);
+    }
+    ref.read(eventLedgerProvider.notifier).syncPendingRecordsToCloud();
+  }
+
+  /// Replaces an existing transaction in place. (Editing used to call
+  /// [addTransaction], which showed the edited entry twice.)
+  Future<void> updateTransaction(EventTransactionModel transaction) async {
+    final localTx = transaction.copyWith(isSynced: false, isDeleted: false);
+    final current = state.value ?? [];
+    final exists = current.any((e) => e.id == localTx.id);
+    state = AsyncData(
+      exists
+          ? [
+              for (final e in current)
+                if (e.id == localTx.id) localTx else e,
+            ]
+          : [localTx, ...current],
+    );
+
+    await EventTransactionTable.saveSingleTransaction(localTx);
+    ref.read(eventLedgerProvider.notifier).syncPendingRecordsToCloud();
+  }
+
   Future<void> deleteTransaction(String transactionId) async {
     final current = state.value ?? [];
     final index = current.indexWhere((e) => e.id == transactionId);
@@ -360,6 +473,44 @@ class EventParticipantsRoster extends _$EventParticipantsRoster {
     state = AsyncData([...current, local]);
 
     await EventParticipantTable.saveParticipant(local);
+    ref.read(eventLedgerProvider.notifier).syncPendingRecordsToCloud();
+  }
+
+  /// Flips the sync flag on members already shown.
+  void markSynced(Set<String> ids) {
+    final current = state.value;
+    if (current == null) return;
+    state = AsyncData([
+      for (final p in current)
+        if (ids.contains(p.id)) p.copyWith(isSynced: true) else p,
+    ]);
+  }
+
+  Future<void> renameParticipant(String participantId, String newName) async {
+    final current = state.value ?? [];
+    final index = current.indexWhere((p) => p.id == participantId);
+    if (index == -1) return;
+    final updated = current[index].copyWith(
+      displayName: newName,
+      isSynced: false,
+    );
+    state = AsyncData([
+      for (final p in current)
+        if (p.id == participantId) updated else p,
+    ]);
+    await EventParticipantTable.saveParticipant(updated);
+    ref.read(eventLedgerProvider.notifier).syncPendingRecordsToCloud();
+  }
+
+  /// Removes a member. The UI only allows this for members with no
+  /// transactions, so balances never reference a missing person.
+  Future<void> removeParticipant(String participantId) async {
+    final current = state.value ?? [];
+    final index = current.indexWhere((p) => p.id == participantId);
+    if (index == -1) return;
+    final marker = current[index].copyWith(isDeleted: true, isSynced: false);
+    state = AsyncData(current.where((p) => p.id != participantId).toList());
+    await EventParticipantTable.saveParticipant(marker);
     ref.read(eventLedgerProvider.notifier).syncPendingRecordsToCloud();
   }
 }

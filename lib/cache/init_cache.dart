@@ -130,6 +130,40 @@ class LocalCacheManager {
     return db.query(table, where: where, whereArgs: whereArgs);
   }
 
+  /// Marks a row as synced ONLY if it still matches what was uploaded.
+  ///
+  /// If the user edited the row while its upload was in flight, the row is
+  /// left unsynced so the newer version is uploaded on the next pass.
+  /// (Previously the sync wrote the uploaded copy back, silently replacing
+  /// the edit with the old values both locally and, later, in the cloud.)
+  static Future<bool> markSyncedIfUnchanged(
+    String table,
+    Map<String, Object?> uploadedRow, {
+    String idColumn = 'id',
+  }) async {
+    final db = await getDatabase();
+    final id = uploadedRow[idColumn];
+    final rows = await db.query(
+      table,
+      where: '$idColumn = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (rows.isEmpty) return false;
+    final current = rows.first;
+    for (final entry in uploadedRow.entries) {
+      if (entry.key == 'isSynced' || entry.key == 'lastSyncAttempt') continue;
+      if ('${current[entry.key]}' != '${entry.value}') return false;
+    }
+    await db.update(
+      table,
+      {'isSynced': 1, 'lastSyncAttempt': DateTime.now().toIso8601String()},
+      where: '$idColumn = ?',
+      whereArgs: [id],
+    );
+    return true;
+  }
+
   /// Hard-deletes the rows of [table] whose id is in [ids].
   static Future<void> deleteByIds(
     String table,
@@ -170,9 +204,7 @@ class LocalCacheManager {
     for (final table in _syncedTables) {
       if (!existing.contains(table)) continue;
       final count = Sqflite.firstIntValue(
-        await db.rawQuery(
-          'SELECT COUNT(*) FROM $table WHERE isSynced = 0',
-        ),
+        await db.rawQuery('SELECT COUNT(*) FROM $table WHERE isSynced = 0'),
       );
       if ((count ?? 0) > 0) return true;
     }

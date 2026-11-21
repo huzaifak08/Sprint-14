@@ -69,8 +69,9 @@ Future<void> syncAllPending(ProviderReader read) async {
   if (participantIds.isNotEmpty) {
     // syncPendingParticipants already covers every business.
     await safe('participants', () {
-      return read(participantProvider(participantIds.first).notifier)
-          .syncPendingParticipants();
+      return read(
+        participantProvider(participantIds.first).notifier,
+      ).syncPendingParticipants();
     });
   }
 }
@@ -87,4 +88,3 @@ Future<List<String>> _pendingBusinessIds(String table) async {
       .toSet()
       .toList();
 }
-

@@ -36,6 +36,7 @@ class BusinessView extends ConsumerWidget {
         error: (err, _) => Center(child: Text("Error: $err")),
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'business_add',
         onPressed: () => _showBusinessForm(context, ref),
         backgroundColor: theme.colorScheme.primary,
         foregroundColor: theme.colorScheme.onPrimary,

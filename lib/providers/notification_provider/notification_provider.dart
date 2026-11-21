@@ -75,9 +75,7 @@ class NotificationNotifier extends _$NotificationNotifier {
               pruneMissing: false,
             );
 
-            await NotificationTable.saveAllFetchedNotifications(
-              result.toSave,
-            );
+            await NotificationTable.saveAllFetchedNotifications(result.toSave);
             state = AsyncData(result.visible);
           },
           onError: (error) {

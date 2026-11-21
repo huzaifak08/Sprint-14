@@ -26,8 +26,14 @@ class HomeView extends ConsumerStatefulWidget {
 
 class _HomeViewState extends ConsumerState<HomeView>
     with WidgetsBindingObserver {
-  int selectedView = 0;
+  // A ValueNotifier instead of setState: changing tabs only rebuilds the
+  // toggle and the FAB, not the whole screen (app bar + all pages).
+  final ValueNotifier<int> _selectedView = ValueNotifier<int>(0);
   late PageController _pageController;
+
+  // True while a tap on the toggle animates the PageView, so the pages it
+  // passes through (Ledger -> Events -> Business) don't flash in the toggle.
+  bool _isAnimatingToPage = false;
   final NotificationCloudService _notificationService =
       NotificationCloudService();
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
@@ -35,7 +41,7 @@ class _HomeViewState extends ConsumerState<HomeView>
   @override
   void initState() {
     super.initState();
-    _pageController = PageController(initialPage: selectedView);
+    _pageController = PageController(initialPage: _selectedView.value);
     WidgetsBinding.instance.addObserver(this);
     _initLogic();
   }
@@ -74,6 +80,7 @@ class _HomeViewState extends ConsumerState<HomeView>
   void dispose() {
     _connectivitySub?.cancel();
     _pageController.dispose();
+    _selectedView.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -217,21 +224,34 @@ class _HomeViewState extends ConsumerState<HomeView>
       ),
       body: PageView(
         controller: _pageController,
-        onPageChanged: (index) => setState(() => selectedView = index),
-        children: const [LedgerView(), EventLedgersView(), BusinessView()],
+        onPageChanged: (index) {
+          if (!_isAnimatingToPage) _selectedView.value = index;
+        },
+        // Kept alive so swiping back doesn't rebuild the whole page
+        // (ledger table + chart) from scratch, which caused the stutter.
+        children: const [
+          _KeepAlivePage(child: LedgerView()),
+          _KeepAlivePage(child: EventLedgersView()),
+          _KeepAlivePage(child: BusinessView()),
+        ],
       ),
-      floatingActionButton: selectedView == 0
-          ? FloatingActionButton(
-              backgroundColor: appTheme.colorScheme.primary,
-              child: Icon(Icons.add, color: appTheme.colorScheme.onPrimary),
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const AddOrUpdateLedgerView(),
-                ),
+      floatingActionButton: ValueListenableBuilder<int>(
+        valueListenable: _selectedView,
+        builder: (context, selected, _) {
+          if (selected != 0) return const SizedBox.shrink();
+          return FloatingActionButton(
+            heroTag: 'home_add_ledger',
+            backgroundColor: appTheme.colorScheme.primary,
+            child: Icon(Icons.add, color: appTheme.colorScheme.onPrimary),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const AddOrUpdateLedgerView(),
               ),
-            )
-          : SizedBox.shrink(),
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -240,44 +260,54 @@ class _HomeViewState extends ConsumerState<HomeView>
       preferredSize: const Size.fromHeight(64),
       child: Padding(
         padding: const EdgeInsets.only(bottom: 12),
-        child: SegmentedButton<int>(
-          segments: const [
-            ButtonSegment(
-              value: 0,
-              label: Text("Ledger"),
-              icon: Icon(Icons.account_balance_wallet_rounded),
-            ),
-            ButtonSegment(
-              value: 1,
-              label: Text("Events"),
-              icon: Icon(Icons.event),
-            ),
-            ButtonSegment(
-              value: 2,
-              label: Text("Business"),
-              icon: Icon(Icons.business),
-            ),
-          ],
-          selected: {selectedView},
-          onSelectionChanged: (value) {
-            setState(() => selectedView = value.first);
-            _pageController.animateToPage(
-              value.first,
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeInOut,
-            );
-          },
-          style: SegmentedButton.styleFrom(
-            selectedBackgroundColor: appTheme.colorScheme.primary,
-            selectedForegroundColor: appTheme.colorScheme.onPrimary,
-            side: BorderSide(color: appTheme.colorScheme.primary),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+        child: ValueListenableBuilder<int>(
+          valueListenable: _selectedView,
+          builder: (context, selected, _) => SegmentedButton<int>(
+            segments: const [
+              ButtonSegment(
+                value: 0,
+                label: Text("Ledger"),
+                icon: Icon(Icons.account_balance_wallet_rounded),
+              ),
+              ButtonSegment(
+                value: 1,
+                label: Text("Events"),
+                icon: Icon(Icons.event),
+              ),
+              ButtonSegment(
+                value: 2,
+                label: Text("Business"),
+                icon: Icon(Icons.business),
+              ),
+            ],
+            selected: {selected},
+            onSelectionChanged: (value) => _goToPage(value.first),
+            style: SegmentedButton.styleFrom(
+              selectedBackgroundColor: appTheme.colorScheme.primary,
+              selectedForegroundColor: appTheme.colorScheme.onPrimary,
+              side: BorderSide(color: appTheme.colorScheme.primary),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
           ),
         ),
       ),
     );
+  }
+
+  Future<void> _goToPage(int index) async {
+    _selectedView.value = index;
+    _isAnimatingToPage = true;
+    try {
+      await _pageController.animateToPage(
+        index,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    } finally {
+      _isAnimatingToPage = false;
+    }
   }
 
   Widget _buildNotificationButton() {
@@ -353,5 +383,27 @@ class _HomeViewState extends ConsumerState<HomeView>
         ],
       ),
     );
+  }
+}
+
+/// Keeps a PageView child alive (and in its own repaint layer) while it is
+/// off-screen, so switching tabs doesn't rebuild it.
+class _KeepAlivePage extends StatefulWidget {
+  final Widget child;
+  const _KeepAlivePage({required this.child});
+
+  @override
+  State<_KeepAlivePage> createState() => _KeepAlivePageState();
+}
+
+class _KeepAlivePageState extends State<_KeepAlivePage>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return RepaintBoundary(child: widget.child);
   }
 }

@@ -151,18 +151,15 @@ class SaleNotifier extends _$SaleNotifier {
           if (success) await SaleTable.hardDelete(s.id);
         } else {
           final success = await service.recordSale(sale: s);
-          if (success) {
-            final synced = s.copyWith(
-              isSynced: true,
-              lastSyncAttempt: DateTime.now(),
-            );
-            await SaleTable.saveSingleSale(synced);
-
-            // Update UI with the new sync status (shows the cloud icon)
+          if (success &&
+              await LocalCacheManager.markSyncedIfUnchanged(
+                SaleTable.tableName,
+                s.toJsonDb(),
+              )) {
             final current = state.value ?? [];
             state = AsyncData([
               for (final item in current)
-                if (item.id == synced.id) synced else item,
+                if (item.id == s.id) item.copyWith(isSynced: true) else item,
             ]);
           }
         }

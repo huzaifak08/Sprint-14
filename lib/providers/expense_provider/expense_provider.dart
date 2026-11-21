@@ -133,18 +133,15 @@ class ExpenseNotifier extends _$ExpenseNotifier {
         }
 
         final success = await service.saveExpense(expense: e);
-        if (success) {
-          final synced = e.copyWith(
-            isSynced: true,
-            lastSyncAttempt: DateTime.now(),
-          );
-          await ExpenseTable.saveSingleExpense(synced);
-
-          // Update local state to reflect synced checkmark (if UI uses it)
+        if (success &&
+            await LocalCacheManager.markSyncedIfUnchanged(
+              ExpenseTable.tableName,
+              e.toJsonDb(),
+            )) {
           final current = state.value ?? [];
           state = AsyncData([
             for (final item in current)
-              if (item.id == synced.id) synced else item,
+              if (item.id == e.id) item.copyWith(isSynced: true) else item,
           ]);
         }
       } catch (err) {

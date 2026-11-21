@@ -147,18 +147,11 @@ class LedgerNotifier extends _$LedgerNotifier {
         final bool success = await service.saveLedger(ledger: ledger);
 
         if (success) {
-          final syncedLedger = ledger.copyWith(
-            isSynced: true,
-            lastSyncAttempt: DateTime.now(),
+          final marked = await LocalCacheManager.markSyncedIfUnchanged(
+            LedgerTable.tableName,
+            ledger.toJsonDb(),
           );
-
-          await LedgerTable.saveSingleLedger(syncedLedger);
-
-          final currentList = state.value ?? [];
-          state = AsyncData([
-            for (final l in currentList)
-              if (l.id == syncedLedger.id) syncedLedger else l,
-          ]);
+          if (marked) _setSyncedInState(ledger.id);
         } else {
           await LedgerTable.saveSingleLedger(
             ledger.copyWith(lastSyncAttempt: DateTime.now()),
@@ -174,6 +167,16 @@ class LedgerNotifier extends _$LedgerNotifier {
         );
       }
     }
+  }
+
+  /// Flips the sync flag of the CURRENT on-screen item (never replaces it
+  /// with the uploaded copy, which may be older than the latest edit).
+  void _setSyncedInState(String? id) {
+    final currentList = state.value ?? [];
+    state = AsyncData([
+      for (final l in currentList)
+        if (l.id == id) l.copyWith(isSynced: true) else l,
+    ]);
   }
 
   /// --- FORCE REFRESH CONTROLLER ---

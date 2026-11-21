@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sprint_14/cache/sync/sync_utils.dart';
 
