@@ -19,8 +19,18 @@ class NotificationCloudService {
   // For schedule:
   static bool _timezoneInitialized = false;
 
+  // Initialise the local-notifications plugin and attach FCM listeners only
+  // once per app run. Previously every foreground message re-initialised the
+  // plugin and added another onMessage listener, so listeners piled up.
+  static bool _localPluginInitialized = false;
+  static bool _foregroundListenerAttached = false;
+  static bool _interactionListenerAttached = false;
+  static RemoteMessage? _lastForegroundMessage;
+
+  static const String _defaultChannelId = 'sprint14_channel';
+
   //* Notification Permission:
-  void requestNotificationPermission() async {
+  Future<void> requestNotificationPermission() async {
     NotificationSettings settings = await _firebaseMessaging.requestPermission(
       alert: true,
       announcement: false,
@@ -45,24 +55,21 @@ class NotificationCloudService {
 
   //* Get Device Token:
   Future<String?> getDeviceToken() async {
-    String? token = await _firebaseMessaging.getToken();
-    dev.log("DEVICE TOKEN => $token");
-    return token;
+    return _firebaseMessaging.getToken();
   }
 
-  //* Notifications Listener:
-  void firebaseNotificationsInit(
+  //* Notifications Listener (local plugin setup, runs once):
+  Future<void> firebaseNotificationsInit(
     BuildContext context,
     RemoteMessage message,
   ) async {
-    var androidInitSetting = const AndroidInitializationSettings(
-      "@mipmap/ic_launcher",
-    );
-    var iosInitSetting = const DarwinInitializationSettings();
+    _lastForegroundMessage = message;
+    if (_localPluginInitialized) return;
+    _localPluginInitialized = true;
 
-    var initSetting = InitializationSettings(
-      android: androidInitSetting,
-      iOS: iosInitSetting,
+    const initSetting = InitializationSettings(
+      android: AndroidInitializationSettings("@mipmap/ic_launcher"),
+      iOS: DarwinInitializationSettings(),
     );
 
     // For Schedule Notifications only:
@@ -70,16 +77,14 @@ class NotificationCloudService {
 
     await _flutterLocalNotiPlugin.initialize(
       settings: initSetting,
-      onDidReceiveNotificationResponse: (payload) {
-        handleMessage(context, message);
-        _handleActionMessage(payload); // After enabling actions
+      onDidReceiveNotificationResponse: (response) {
+        final tapped = _lastForegroundMessage;
+        if (tapped != null) {
+          handleMessage(AppData.shared.navigatorKey.currentContext, tapped);
+        }
+        _handleActionMessage(response);
       },
     );
-
-    FirebaseMessaging.onMessage.listen((message) {
-      dev.log(message.notification?.title ?? "NO NOTIFICATION TITLE");
-      dev.log(message.notification?.body ?? "NO NOTIFICATION BODY");
-    });
   }
 
   // For Schedule notifications only:
@@ -94,8 +99,11 @@ class NotificationCloudService {
   }
 
   //* Foreground Notifications:
-  void handleForegroundNotifications(BuildContext context) async {
-    FirebaseMessaging.onMessage.listen((message) {
+  Future<void> handleForegroundNotifications(BuildContext context) async {
+    if (_foregroundListenerAttached) return;
+    _foregroundListenerAttached = true;
+
+    FirebaseMessaging.onMessage.listen((message) async {
       RemoteNotification? notification = message.notification;
       // AndroidNotification? androidNoti = message.notification?.android;
 
@@ -111,11 +119,11 @@ class NotificationCloudService {
 
       // android:
       if (Platform.isAndroid) {
-        firebaseNotificationsInit(
+        await firebaseNotificationsInit(
           AppData.shared.navigatorKey.currentContext ?? context,
           message,
         );
-        showNotification(message);
+        await showNotification(message);
       }
     });
   }
@@ -123,10 +131,12 @@ class NotificationCloudService {
   //* Render Notification:
   Future<void> showNotification(RemoteMessage message) async {
     if (message.notification != null) {
-      // Channel Setting:
+      // Channel Setting (the android block / channel id can be missing):
+      final channelId =
+          message.notification?.android?.channelId ?? _defaultChannelId;
       AndroidNotificationChannel channel = AndroidNotificationChannel(
-        message.notification!.android!.channelId.toString(),
-        message.notification!.android!.channelId.toString(),
+        channelId,
+        channelId,
         importance: Importance.high,
         showBadge: true,
         playSound: true,
@@ -178,20 +188,17 @@ class NotificationCloudService {
           .remainder(100000);
 
       // Show Notifications:
-      Future.delayed(Duration.zero, () {
-        // Todo: Use UUID instead of 0:
-        _flutterLocalNotiPlugin.show(
-          id: safeUniqueNotificationId,
-          title: message.notification?.title,
-          body: message.notification?.body,
-          notificationDetails: notificationDetails,
-          payload: "Send anything as payload as per need",
-        );
-      });
+      await _flutterLocalNotiPlugin.show(
+        id: safeUniqueNotificationId,
+        title: message.notification?.title,
+        body: message.notification?.body,
+        notificationDetails: notificationDetails,
+        payload: "Send anything as payload as per need",
+      );
     }
   }
 
-  void iosForegroundMessage() async {
+  Future<void> iosForegroundMessage() async {
     await _firebaseMessaging.setForegroundNotificationPresentationOptions(
       alert: true,
       badge: true,
@@ -201,6 +208,9 @@ class NotificationCloudService {
 
   //* Background and Terminated Notifications:
   Future<void> setUpInteractMessage(BuildContext context) async {
+    if (_interactionListenerAttached) return;
+    _interactionListenerAttached = true;
+
     // Background State:
     // onMessageOpenedApp --> Tappable notification to navigate
     FirebaseMessaging.onMessageOpenedApp.listen((message) {
@@ -299,7 +309,7 @@ class NotificationCloudService {
   }
 
   //* Handle Notifications Actions:
-  void _handleActionMessage(NotificationResponse notificationResponse) async {
+  void _handleActionMessage(NotificationResponse notificationResponse) {
     debugPrint("Notification Action: ${notificationResponse.actionId}");
 
     if (notificationResponse.actionId == "reply_id") {

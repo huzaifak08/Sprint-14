@@ -33,7 +33,7 @@ final class BusinessNotifierProvider
   BusinessNotifier create() => BusinessNotifier();
 }
 
-String _$businessNotifierHash() => r'10b8bda57901b9616240c009d7bcf45a25b7309e';
+String _$businessNotifierHash() => r'8d1527c26e085b008ce2541ef75b3bb0b1866831';
 
 abstract class _$BusinessNotifier extends $AsyncNotifier<List<BusinessModel>> {
   FutureOr<List<BusinessModel>> build();

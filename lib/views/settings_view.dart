@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:sprint_14/cache/init_cache.dart';
 import 'package:sprint_14/components/app_network_image.dart';
 import 'package:sprint_14/models/user_model.dart';
 import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
@@ -306,7 +305,10 @@ class SettingsView extends ConsumerWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Logout"),
-        content: const Text("Are you sure? Local cache will be preserved."),
+        content: const Text(
+          "Are you sure? Pending changes will be uploaded first. If you're "
+          "offline, they stay on this device until you sign in again.",
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -314,18 +316,8 @@ class SettingsView extends ConsumerWidget {
           ),
           ElevatedButton(
             onPressed: () async {
-              await ref.read(currentUserProvider.notifier).clearUser();
-
-              await LocalCacheManager.deleteAllCacheData();
-
-              // ref.invalidate(currentUserProvider);
-              // ref.invalidate(ledgerProvider);
-              // ref.invalidate(businessProvider);
-              // ref.invalidate(saleProvider);
-              // ref.invalidate(productProvider);
-              // ref.invalidate(expenseProvider);
-              // ref.invalidate(appSettingsProvider);
-
+              // logout() uploads pending changes, removes the push token and
+              // clears the cache only when nothing is left unsynced.
               await ref.read(authControllerProvider.notifier).logout();
               if (context.mounted) {
                 ref.container.refresh(authControllerProvider);

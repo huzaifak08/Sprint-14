@@ -1,5 +1,7 @@
 import 'dart:async';
-import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:sprint_14/cache/init_cache.dart';
+import 'package:sprint_14/cache/sync/sync_merge.dart';
+import 'package:sprint_14/cache/sync/sync_utils.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:sprint_14/models/event_ledger_model.dart';
 import 'package:sprint_14/models/event_participant_model.dart';
@@ -38,27 +40,35 @@ class EventLedgerNotifier extends _$EventLedgerNotifier {
 
   Future<void> _syncLedgerEnvelopesFromCloud(String userId) async {
     try {
+      // Offline, Firestore answers from its partial cache; skip so nothing
+      // is mistaken for a remote deletion.
+      if (!await isOnline()) return;
+
+      // Push pending local changes first so the fetch reflects them.
+      await syncPendingRecordsToCloud();
+
       final cloudProfiles = await _service.getLedgersForUser(userId);
+      final localRows = await LocalCacheManager.queryAllRows(
+        EventLedgerTable.tableName,
+      );
+      final local = localRows.map(EventLedgerModel.fromJsonDb).toList();
 
-      final currentLocalList = state.value ?? [];
-      final Map<String, EventLedgerModel> localMap = {
-        for (final item in currentLocalList) item.id: item,
-      };
+      final result = mergeCloudWithLocal<EventLedgerModel>(
+        cloud: cloudProfiles,
+        local: local,
+        idOf: (l) => l.id,
+        isSynced: (l) => l.isSynced,
+        isDeleted: (l) => l.isDeleted,
+        markSynced: (l) => l.copyWith(isSynced: true),
+        sort: (a, b) => b.createdAt.compareTo(a.createdAt),
+      );
 
-      final List<EventLedgerModel> mergedList = [];
-      for (final cloudItem in cloudProfiles) {
-        final localItem = localMap[cloudItem.id];
-        if (localItem != null && !localItem.isSynced) {
-          mergedList.add(localItem);
-        } else {
-          mergedList.add(cloudItem.copyWith(isSynced: true));
-        }
-      }
-
-      await EventLedgerTable.saveAllLedgers(mergedList);
-      state = AsyncData(mergedList);
-
-      syncPendingRecordsToCloud();
+      await EventLedgerTable.saveAllLedgers(result.toSave);
+      await LocalCacheManager.deleteByIds(
+        EventLedgerTable.tableName,
+        result.toRemove,
+      );
+      state = AsyncData(result.visible);
     } catch (e) {
       dev.log(
         "Cloud Ledgers Envelope Synchronization Sync Failure: $e",
@@ -89,7 +99,9 @@ class EventLedgerNotifier extends _$EventLedgerNotifier {
 
   Future<void> deleteLedger(String ledgerId) async {
     final current = state.value ?? [];
-    final match = current.firstWhere((element) => element.id == ledgerId);
+    final index = current.indexWhere((element) => element.id == ledgerId);
+    if (index == -1) return;
+    final match = current[index];
     final deletedMarker = match.copyWith(isDeleted: true, isSynced: false);
 
     state = AsyncData(
@@ -99,9 +111,14 @@ class EventLedgerNotifier extends _$EventLedgerNotifier {
     syncPendingRecordsToCloud();
   }
 
-  Future<void> syncPendingRecordsToCloud() async {
-    final connectivity = await Connectivity().checkConnectivity();
-    if (connectivity.contains(ConnectivityResult.none)) return;
+  /// Serialised with [SyncLock]: the transaction and participant providers
+  /// call this too, and parallel runs would upload the same rows twice.
+  Future<void> syncPendingRecordsToCloud() {
+    return SyncLock.run('event_ledgers', _syncPendingRecordsToCloud);
+  }
+
+  Future<void> _syncPendingRecordsToCloud() async {
+    if (!await isOnline()) return;
 
     // A. Sync Ledger Envelopes
     final unsyncedLedgers = await EventLedgerTable.getUnsyncedLedgers();
@@ -183,7 +200,8 @@ class EventLedgerNotifier extends _$EventLedgerNotifier {
     for (var ms in unsyncedMilestones) {
       try {
         if (ms.isDeleted) {
-          await SettlementMilestoneTable.hardDelete(ms.id);
+          final success = await _service.deleteMilestone(milestoneId: ms.id);
+          if (success) await SettlementMilestoneTable.hardDelete(ms.id);
           continue;
         }
         final activeTxInMilestone =
@@ -232,8 +250,27 @@ class ActiveEventTransactions extends _$ActiveEventTransactions {
     _cloudSubscription?.cancel();
     _cloudSubscription = _service.streamActiveTransactions(eventId).listen(
       (cloudList) async {
-        await EventTransactionTable.saveAllTransactions(cloudList);
-        state = AsyncData(cloudList);
+        final localRows = await LocalCacheManager.queryAllRows(
+          EventTransactionTable.tableName,
+          where: 'eventId = ? AND milestoneId IS NULL',
+          whereArgs: [eventId],
+        );
+        final local = localRows.map(EventTransactionModel.fromJsonDb).toList();
+
+        // The stream only covers active (unsettled) rows, so rows missing
+        // from it aren't deleted: never prune here.
+        final result = mergeCloudWithLocal<EventTransactionModel>(
+          cloud: cloudList,
+          local: local,
+          idOf: (t) => t.id,
+          isSynced: (t) => t.isSynced,
+          isDeleted: (t) => t.isDeleted,
+          markSynced: (t) => t.copyWith(isSynced: true),
+          pruneMissing: false,
+        );
+
+        await EventTransactionTable.saveAllTransactions(result.toSave);
+        state = AsyncData(result.visible);
       },
       onError: (err) => dev.log(
         "Live transaction stream broken: $err",
@@ -253,7 +290,9 @@ class ActiveEventTransactions extends _$ActiveEventTransactions {
 
   Future<void> deleteTransaction(String transactionId) async {
     final current = state.value ?? [];
-    final match = current.firstWhere((e) => e.id == transactionId);
+    final index = current.indexWhere((e) => e.id == transactionId);
+    if (index == -1) return;
+    final match = current[index];
     state = AsyncData(current.where((e) => e.id != transactionId).toList());
 
     await EventTransactionTable.saveSingleTransaction(
@@ -287,8 +326,26 @@ class EventParticipantsRoster extends _$EventParticipantsRoster {
     _cloudSubscription?.cancel();
     _cloudSubscription = _service.streamParticipants(eventId).listen(
       (cloudParticipants) async {
-        await EventParticipantTable.saveAllParticipants(cloudParticipants);
-        state = AsyncData(cloudParticipants);
+        final localRows = await LocalCacheManager.queryAllRows(
+          EventParticipantTable.tableName,
+          where: 'eventId = ?',
+          whereArgs: [eventId],
+        );
+        final local = localRows.map(EventParticipantModel.fromJsonDb).toList();
+
+        // Keep participants added offline visible until they're uploaded.
+        final result = mergeCloudWithLocal<EventParticipantModel>(
+          cloud: cloudParticipants,
+          local: local,
+          idOf: (p) => p.id,
+          isSynced: (p) => p.isSynced,
+          isDeleted: (p) => p.isDeleted,
+          markSynced: (p) => p.copyWith(isSynced: true),
+          pruneMissing: false,
+        );
+
+        await EventParticipantTable.saveAllParticipants(result.toSave);
+        state = AsyncData(result.visible);
       },
       onError: (err) => dev.log(
         "Live participant stream disrupted: $err",
@@ -389,8 +446,22 @@ Future<EventFinancialSummary> eventFinancialSummary(
     );
   }
 
-  final String clearMyIdKey = matchingMeProfile.id;
+  return computeEventFinancialSummary(
+    transactions: activeTransactions,
+    myParticipantId: matchingMeProfile.id,
+  );
+}
 
+/// Rounds to 2 decimals so float drift (0.1 + 0.2 = 0.30000000000000004)
+/// never shows up in balances.
+double roundMoney(double value) => (value * 100).roundToDouble() / 100;
+
+/// Pure calculation behind [eventFinancialSummary], kept separate so it can
+/// be unit tested.
+EventFinancialSummary computeEventFinancialSummary({
+  required List<EventTransactionModel> transactions,
+  required String myParticipantId,
+}) {
   double computedTotalCollected = 0.0;
   double computedPoolSpent = 0.0;
   double computedOutPocketSpent = 0.0;
@@ -399,11 +470,11 @@ Future<EventFinancialSummary> eventFinancialSummary(
   double computedMyOutPocketPaid = 0.0;
   double computedMyObligationDebtShare = 0.0;
 
-  for (var tx in activeTransactions) {
+  for (final tx in transactions) {
     if (tx.isFundDeposit) {
       // Flow A: Pool Deposit
       computedTotalCollected += tx.totalAmount;
-      if (tx.paidById == clearMyIdKey) {
+      if (tx.paidById == myParticipantId) {
         computedMyTotalDeposits += tx.totalAmount;
       }
     } else {
@@ -412,15 +483,13 @@ Future<EventFinancialSummary> eventFinancialSummary(
         computedPoolSpent += tx.totalAmount;
       } else {
         computedOutPocketSpent += tx.totalAmount;
-        if (tx.paidById == clearMyIdKey) {
+        if (tx.paidById == myParticipantId) {
           computedMyOutPocketPaid += tx.totalAmount;
         }
       }
 
       // Tally consumed split shares
-      if (tx.splitDetails.containsKey(clearMyIdKey)) {
-        computedMyObligationDebtShare += tx.splitDetails[clearMyIdKey] ?? 0.0;
-      }
+      computedMyObligationDebtShare += tx.splitDetails[myParticipantId] ?? 0.0;
     }
   }
 
@@ -432,12 +501,12 @@ Future<EventFinancialSummary> eventFinancialSummary(
       yourTotalContributed - computedMyObligationDebtShare;
 
   return EventFinancialSummary(
-    totalCollected: computedTotalCollected,
-    totalGroupSpent: totalGroupSpent,
-    totalPoolSpent: computedPoolSpent,
-    totalOutPocketSpent: computedOutPocketSpent,
-    remainingPoolCash: remainingPoolCash,
-    yourTotalContributed: yourTotalContributed,
-    yourNetBalance: yourNetBalance,
+    totalCollected: roundMoney(computedTotalCollected),
+    totalGroupSpent: roundMoney(totalGroupSpent),
+    totalPoolSpent: roundMoney(computedPoolSpent),
+    totalOutPocketSpent: roundMoney(computedOutPocketSpent),
+    remainingPoolCash: roundMoney(remainingPoolCash),
+    yourTotalContributed: roundMoney(yourTotalContributed),
+    yourNetBalance: roundMoney(yourNetBalance),
   );
 }

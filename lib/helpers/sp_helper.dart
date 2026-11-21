@@ -3,9 +3,9 @@ import 'package:sprint_14/helpers/constants.dart';
 
 class SpHelper {
   // Save Theme Mode:
-  static void addOrUpdateThemeMode(String modeName) async {
+  static Future<void> addOrUpdateThemeMode(String modeName) async {
     final SharedPreferences sp = await SharedPreferences.getInstance();
-    sp.setString(themeKey, modeName);
+    await sp.setString(themeKey, modeName);
   }
 
   // Get Theme Mode:

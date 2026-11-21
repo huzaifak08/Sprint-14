@@ -225,6 +225,17 @@ class EventLedgerService {
     }
   }
 
+  /// Deletes a milestone document from the cloud.
+  Future<bool> deleteMilestone({required String milestoneId}) async {
+    try {
+      await _milestoneRef.doc(milestoneId).delete();
+      return true;
+    } catch (e) {
+      dev.log("Milestone deletion failed: $e", name: "EventLedgerService");
+      return false;
+    }
+  }
+
   Future<List<SettlementMilestoneModel>> getHistoricalMilestones(
     String eventId,
   ) async {

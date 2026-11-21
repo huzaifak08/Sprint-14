@@ -1,9 +1,10 @@
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:sprint_14/cache/tables/ledger_table.dart';
 import 'package:sprint_14/models/ledger_model.dart';
 import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
-import 'package:sprint_14/providers/current_user_provider/current_user_provider.dart';
+import 'package:sprint_14/cache/init_cache.dart';
+import 'package:sprint_14/cache/sync/sync_merge.dart';
+import 'package:sprint_14/cache/sync/sync_utils.dart';
 import 'package:sprint_14/services/ledger_service.dart';
 import 'dart:developer' as dev;
 
@@ -29,38 +30,36 @@ class LedgerNotifier extends _$LedgerNotifier {
   /// --- CLOUD SYNC & DIFFERENTIAL CACHE MERGE ---
   Future<void> _fetchAndSyncFromCloud(String uid) async {
     try {
-      final service = LedgerService(uid: uid);
-      final cloudLedgers = await service.getAllLedgers();
+      // Offline, Firestore answers from its partial cache; skip so nothing
+      // is mistaken for a remote deletion.
+      if (!await isOnline()) return;
 
-      final currentLocalList = state.value ?? [];
+      // Push pending local changes first so the fetch reflects them.
+      await syncPendingLedgers();
 
-      if (cloudLedgers.isEmpty && currentLocalList.isEmpty) return;
+      final cloudLedgers = await LedgerService(uid: uid).getAllLedgers();
+      final localRows = await LocalCacheManager.queryAllRows(
+        LedgerTable.tableName,
+      );
+      final local = localRows.map(LedgerModel.fromJsonDb).toList();
 
-      final Map<String, LedgerModel> localMap = {
-        for (final l in currentLocalList) l.id!: l,
-      };
+      final result = mergeCloudWithLocal<LedgerModel>(
+        cloud: cloudLedgers,
+        local: local,
+        idOf: (l) => l.id ?? '',
+        isSynced: (l) => l.isSynced,
+        isDeleted: (l) => l.isDeleted,
+        markSynced: (l) => l.copyWith(isSynced: true),
+        sort: (a, b) => b.dateTime.compareTo(a.dateTime),
+      );
 
-      final List<LedgerModel> mergedLedgers = [];
+      await LedgerTable.saveAllFetchedLedgers(result.toSave);
+      await LocalCacheManager.deleteByIds(
+        LedgerTable.tableName,
+        result.toRemove,
+      );
 
-      for (final cloud in cloudLedgers) {
-        final local = localMap[cloud.id];
-
-        // If local record exists but hasn't pushed its changes up yet, preserve local edits
-        if (local != null && !local.isSynced) {
-          mergedLedgers.add(local);
-        } else {
-          mergedLedgers.add(cloud.copyWith(isSynced: true));
-        }
-      }
-
-      // Persist merged data to local cache
-      await LedgerTable.saveAllFetchedLedgers(mergedLedgers);
-
-      // Update the active state with AsyncData wrapper matching async notifier principles
-      state = AsyncData(mergedLedgers);
-
-      // Trigger standard outbound sync process for dirty mutations left over from offline usage
-      syncPendingLedgers();
+      state = AsyncData(result.visible);
     } catch (e) {
       dev.log(
         "Cloud Ledger Synchronization Disruption: $e",
@@ -100,7 +99,9 @@ class LedgerNotifier extends _$LedgerNotifier {
   /// --- DELETE TRANSACTION (Soft) ---
   Future<void> deleteLedger(String ledgerId) async {
     final current = state.value ?? [];
-    final ledger = current.firstWhere((l) => l.id == ledgerId);
+    final index = current.indexWhere((l) => l.id == ledgerId);
+    if (index == -1) return;
+    final ledger = current[index];
 
     final deletedMarker = ledger.copyWith(
       isDeleted: true,
@@ -116,22 +117,22 @@ class LedgerNotifier extends _$LedgerNotifier {
   }
 
   /// --- BACKGROUND CLOUD SYNC PIPELINE ENGINE ---
-  Future<void> syncPendingLedgers() async {
-    final user = ref.read(currentUserProvider).value;
-    if (user == null) return;
+  /// Serialised with [SyncLock] so overlapping calls never double-upload.
+  Future<void> syncPendingLedgers() {
+    return SyncLock.run('ledgers', _syncPendingLedgers);
+  }
 
-    final connectivity = await Connectivity().checkConnectivity();
-    final isOnline = connectivity.any(
-      (result) => result != ConnectivityResult.none,
-    );
-    if (!isOnline) return;
+  Future<void> _syncPendingLedgers() async {
+    final user = ref.read(authControllerProvider).value;
+    if (user == null) return;
+    if (!await isOnline()) return;
 
     final service = LedgerService(uid: user.uid);
     final unsyncedLedgers = await LedgerTable.getUnsyncedLedgers();
 
     for (final ledger in unsyncedLedgers) {
       try {
-        // --- PROCESSS DELETIONS ---
+        // --- PROCESS DELETIONS ---
         if (ledger.isDeleted) {
           final bool success = await service.deleteLedgerData(
             ledgerId: ledger.id!,
@@ -153,16 +154,19 @@ class LedgerNotifier extends _$LedgerNotifier {
 
           await LedgerTable.saveSingleLedger(syncedLedger);
 
-          // Update localized element data mapping parameters inside live running arrays
           final currentList = state.value ?? [];
           state = AsyncData([
             for (final l in currentList)
               if (l.id == syncedLedger.id) syncedLedger else l,
           ]);
+        } else {
+          await LedgerTable.saveSingleLedger(
+            ledger.copyWith(lastSyncAttempt: DateTime.now()),
+          );
         }
       } catch (e) {
         dev.log(
-          "Outbound Sync failure for record tracking node ${ledger.id}: $e",
+          "Outbound sync failed for ledger ${ledger.id}: $e",
           name: "LedgerProvider",
         );
         await LedgerTable.saveSingleLedger(
@@ -174,7 +178,7 @@ class LedgerNotifier extends _$LedgerNotifier {
 
   /// --- FORCE REFRESH CONTROLLER ---
   Future<void> forceRefresh() async {
-    final user = ref.read(currentUserProvider).value;
+    final user = ref.read(authControllerProvider).value;
     if (user == null) return;
     state = const AsyncLoading();
     await _fetchAndSyncFromCloud(user.uid);

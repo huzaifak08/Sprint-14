@@ -19,12 +19,23 @@ class ParticipantService {
         name: "ParticipantService",
       );
 
-      // A. Query users collection to find the matching UID
-      final userQuery = await firestore
+      // A. Query users collection to find the matching UID.
+      // New accounts store the email lowercased; older accounts stored it as
+      // typed, so fall back to the exact input if the lowercase lookup misses.
+      final normalized = email.trim().toLowerCase();
+      var userQuery = await firestore
           .collection(usersCollection)
-          .where('email', isEqualTo: email.trim().toLowerCase())
+          .where('email', isEqualTo: normalized)
           .limit(1)
           .get();
+
+      if (userQuery.docs.isEmpty && email.trim() != normalized) {
+        userQuery = await firestore
+            .collection(usersCollection)
+            .where('email', isEqualTo: email.trim())
+            .limit(1)
+            .get();
+      }
 
       if (userQuery.docs.isEmpty) {
         throw Exception("No user found with this email address.");

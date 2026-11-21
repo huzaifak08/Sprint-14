@@ -1,7 +1,9 @@
 import 'dart:io';
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:sprint_14/cache/init_cache.dart';
+import 'package:sprint_14/cache/sync/sync_merge.dart';
+import 'package:sprint_14/cache/sync/sync_utils.dart';
 import 'package:sprint_14/cache/tables/business_table.dart';
 import 'package:sprint_14/models/business_model.dart';
 import 'package:sprint_14/models/participant_model.dart';
@@ -36,44 +38,44 @@ class BusinessNotifier extends _$BusinessNotifier {
   /// --- CLOUD LOAD PARTIALLY SCOPED MAPS & MERGE ---
   Future<void> _fetchAndSyncFromCloud(String uid) async {
     try {
+      // Offline, Firestore answers from its partial cache; skip so nothing
+      // is mistaken for a remote deletion.
+      if (!await isOnline()) return;
+
       final service = BusinessService(uid: uid);
 
       // 🔥 STEP A: Ask the service for the business IDs this user belongs to
       final List<String> targetedBusinessIds = await service
           .getParticipantBusinessIds();
 
-      if (targetedBusinessIds.isEmpty) {
-        dev.log(
-          "No active workspace links found for user: $uid",
-          name: "BusinessProvider",
-        );
-        await BusinessTable.deleteAllBusinesses();
-        state = const AsyncData([]);
-        return;
-      }
+      // STEP B: Fetch the actual business profiles matching those IDs.
+      // An empty list is still merged so pending local businesses survive.
+      final cloud = targetedBusinessIds.isEmpty
+          ? <BusinessModel>[]
+          : await service.getBusinessesByIds(targetedBusinessIds);
 
-      // 🔥 STEP B: Fetch the actual business profiles matching those IDs
-      final cloud = await service.getBusinessesByIds(targetedBusinessIds);
+      final localRows = await LocalCacheManager.queryAllRows(
+        BusinessTable.tableName,
+      );
+      final local = localRows.map(BusinessModel.fromJsonDb).toList();
 
-      final currentList = state.value ?? [];
-      final Map<String, BusinessModel> currentMap = {
-        for (final b in currentList) b.id: b,
-      };
-
-      final List<BusinessModel> merged = [];
-
-      for (final c in cloud) {
-        final local = currentMap[c.id];
-        if (local != null && !local.isSynced) {
-          merged.add(local);
-        } else {
-          merged.add(c.copyWith(isSynced: true));
-        }
-      }
+      final result = mergeCloudWithLocal<BusinessModel>(
+        cloud: cloud,
+        local: local,
+        idOf: (b) => b.id,
+        isSynced: (b) => b.isSynced,
+        isDeleted: (b) => b.isDeleted,
+        markSynced: (b) => b.copyWith(isSynced: true),
+        sort: (a, b) => b.createdAt.compareTo(a.createdAt),
+      );
 
       // 3. Update SQLite and Riverpod state
-      await BusinessTable.saveAllFetchedBusinesses(merged);
-      state = AsyncData(merged);
+      await BusinessTable.saveAllFetchedBusinesses(result.toSave);
+      await LocalCacheManager.deleteByIds(
+        BusinessTable.tableName,
+        result.toRemove,
+      );
+      state = AsyncData(result.visible);
 
       // 4. Fire upstream data sync for pending local changes
       syncPending();
@@ -113,7 +115,9 @@ class BusinessNotifier extends _$BusinessNotifier {
   /// --- DELETE BUSINESS (Soft) ---
   Future<void> deleteBusiness(String id) async {
     final current = state.value ?? [];
-    final business = current.firstWhere((b) => b.id == id);
+    final index = current.indexWhere((b) => b.id == id);
+    if (index == -1) return;
+    final business = current[index];
     final deletedMarker = business.copyWith(isDeleted: true, isSynced: false);
 
     // Remove from UI immediately
@@ -124,12 +128,14 @@ class BusinessNotifier extends _$BusinessNotifier {
   }
 
   /// --- FULL SYNC LOGIC (Storage + Firestore) ---
-  Future<void> syncPending() async {
+  Future<void> syncPending() {
+    return SyncLock.run('businesses', _syncPending);
+  }
+
+  Future<void> _syncPending() async {
     final authUser = ref.read(authControllerProvider).value;
     if (authUser == null) return;
-
-    final connectivity = await Connectivity().checkConnectivity();
-    if (connectivity.contains(ConnectivityResult.none)) return;
+    if (!await isOnline()) return;
 
     final service = BusinessService(uid: authUser.uid);
     final unsynced = await BusinessTable.getUnsyncedBusinesses();

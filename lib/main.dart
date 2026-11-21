@@ -1,7 +1,9 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sprint_14/cache/cache_owner.dart';
 import 'package:sprint_14/cache/init_cache.dart';
 import 'package:sprint_14/helpers/app_data.dart';
 import 'package:sprint_14/helpers/theme.dart';
@@ -22,15 +24,20 @@ void main() async {
 
   await Firebase.initializeApp();
 
+  // Make sure the local cache belongs to the signed-in account (if any)
+  // before any provider reads it.
+  final existingUser = FirebaseAuth.instance.currentUser;
+  if (existingUser != null) await CacheOwner.ensureOwner(existingUser.uid);
+
   // Notifications:
   FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
 
+  // A single provider container for the whole app. Non-widget code
+  // (e.g. utils/save_send_notification.dart) reads the same instance.
   runApp(
-    ProviderScope(
-      child: UncontrolledProviderScope(
-        container: AppProviderContainer.instance,
-        child: const MyApp(),
-      ),
+    UncontrolledProviderScope(
+      container: AppProviderContainer.instance,
+      child: const MyApp(),
     ),
   );
 }

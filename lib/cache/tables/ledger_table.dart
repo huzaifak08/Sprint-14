@@ -63,7 +63,12 @@ class LedgerTable {
   static Future<List<LedgerModel>> getAllLedgersFromCache() async {
     final db = await LocalCacheManager.getDatabase();
     // We order by dateTime descending so newest expenses show first
-    final maps = await db.query(tableName, orderBy: 'dateTime DESC');
+    final maps = await db.query(
+      tableName,
+      where: 'isDeleted = ?',
+      whereArgs: [0],
+      orderBy: 'dateTime DESC',
+    );
     return List.generate(maps.length, (i) => LedgerModel.fromJsonDb(maps[i]));
   }
 

@@ -119,6 +119,66 @@ class LocalCacheManager {
     );
   }
 
+  /// Returns every row of [table] matching [where], including unsynced and
+  /// soft-deleted rows. Used by the sync merge.
+  static Future<List<Map<String, Object?>>> queryAllRows(
+    String table, {
+    String? where,
+    List<Object?>? whereArgs,
+  }) async {
+    final db = await getDatabase();
+    return db.query(table, where: where, whereArgs: whereArgs);
+  }
+
+  /// Hard-deletes the rows of [table] whose id is in [ids].
+  static Future<void> deleteByIds(
+    String table,
+    List<String> ids, {
+    String idColumn = 'id',
+  }) async {
+    if (ids.isEmpty) return;
+    final db = await getDatabase();
+    final batch = db.batch();
+    for (final id in ids) {
+      batch.delete(table, where: '$idColumn = ?', whereArgs: [id]);
+    }
+    await batch.commit(noResult: true);
+  }
+
+  /// Tables that hold user data with an `isSynced` flag.
+  static const List<String> _syncedTables = [
+    'ledgers',
+    'businesses',
+    'products',
+    'sales',
+    'expenses',
+    'participants',
+    'notifications',
+    'event_ledgers',
+    'event_participants',
+    'event_transactions',
+    'settlement_milestones',
+  ];
+
+  /// True if any table still has changes that haven't reached the cloud.
+  static Future<bool> hasUnsyncedData() async {
+    final db = await getDatabase();
+    final existing = (await db.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type='table'",
+    )).map((t) => t['name'].toString()).toSet();
+
+    for (final table in _syncedTables) {
+      if (!existing.contains(table)) continue;
+      final count = Sqflite.firstIntValue(
+        await db.rawQuery(
+          'SELECT COUNT(*) FROM $table WHERE isSynced = 0',
+        ),
+      );
+      if ((count ?? 0) > 0) return true;
+    }
+    return false;
+  }
+
   static Future<void> deleteAllCacheData() async {
     final db = await getDatabase();
     final tables = await db.rawQuery(

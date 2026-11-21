@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:sprint_14/cache/init_cache.dart';
+import 'package:sprint_14/cache/sync/sync_merge.dart';
+import 'package:sprint_14/cache/sync/sync_utils.dart';
 import 'package:sprint_14/cache/tables/notification_table.dart';
 import 'package:sprint_14/models/notification_model.dart';
 import 'package:sprint_14/services/notification_service.dart';
@@ -52,9 +55,30 @@ class NotificationNotifier extends _$NotificationNotifier {
         .streamUserNotifications(uid)
         .listen(
           (cloudPayload) async {
-            await NotificationTable.saveAllFetchedNotifications(cloudPayload);
+            final localRows = await LocalCacheManager.queryAllRows(
+              NotificationTable.tableName,
+              where: 'userId = ?',
+              whereArgs: [uid],
+            );
+            final local = localRows.map(NotificationModel.fromJsonDb).toList();
 
-            state = AsyncData(cloudPayload);
+            // The stream is limited to the latest 40, so older rows missing
+            // from it aren't deletions: never prune. Keeps offline
+            // "mark as read" / delete changes instead of overwriting them.
+            final result = mergeCloudWithLocal<NotificationModel>(
+              cloud: cloudPayload,
+              local: local,
+              idOf: (n) => n.id,
+              isSynced: (n) => n.isSynced,
+              isDeleted: (n) => n.isDeleted,
+              markSynced: (n) => n.copyWith(isSynced: true),
+              pruneMissing: false,
+            );
+
+            await NotificationTable.saveAllFetchedNotifications(
+              result.toSave,
+            );
+            state = AsyncData(result.visible);
           },
           onError: (error) {
             dev.log(
@@ -176,7 +200,12 @@ class NotificationNotifier extends _$NotificationNotifier {
     }
   }
 
-  Future<void> syncPendingNotifications() async {
+  Future<void> syncPendingNotifications() {
+    return SyncLock.run('notifications', _syncPendingNotifications);
+  }
+
+  Future<void> _syncPendingNotifications() async {
+    if (!await isOnline()) return;
     dev.log(
       "Processing offline queued notification mutations...",
       name: "NotificationProvider",

@@ -1,5 +1,7 @@
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:sprint_14/cache/init_cache.dart';
+import 'package:sprint_14/cache/sync/sync_merge.dart';
+import 'package:sprint_14/cache/sync/sync_utils.dart';
 import 'package:sprint_14/cache/tables/sale_table.dart';
 import 'package:sprint_14/models/sale_model.dart';
 import 'package:sprint_14/providers/current_user_provider/current_user_provider.dart';
@@ -48,55 +50,39 @@ class SaleNotifier extends _$SaleNotifier {
     if (user == null) return;
 
     try {
-      final connectivity = await Connectivity().checkConnectivity();
-      if (connectivity.contains(ConnectivityResult.none)) return;
+      if (!await isOnline()) return;
 
-      final service = SaleService(uid: user.uid);
-
-      // 1. 🔥 PUSH LOCAL CHANGES FIRST
-      // This ensures that when we fetch cloud data next, our new sale is likely already there.
+      // 1. Push local changes first so the fetch already contains them.
       await syncPending(businessId);
 
       // 2. Fetch fresh cloud data
-      dev.log("Fetching fresh cloud data...", name: "SaleProvider");
-      final cloudSales = await service.getBusinessSales(businessId);
+      final cloudSales = await SaleService(
+        uid: user.uid,
+      ).getBusinessSales(businessId);
 
-      // 3. Persist to local DB
-      await SaleTable.saveAllSales(cloudSales);
+      // 3. Merge with every local row (incl. unsynced / soft-deleted) so the
+      //    cloud copy never overwrites changes that haven't been uploaded.
+      final localRows = await LocalCacheManager.queryAllRows(
+        SaleTable.tableName,
+        where: 'businessId = ?',
+        whereArgs: [businessId],
+      );
+      final local = localRows.map(SaleModel.fromJsonDb).toList();
 
-      // 4. 🔥 SMART MERGE: Check for local sales that are still 'isSynced = false'
-      // This handles the case where syncPending is still running or failed.
-      final unsynced = await SaleTable.getUnsyncedSalesByBusiness(businessId);
+      final result = mergeCloudWithLocal<SaleModel>(
+        cloud: cloudSales,
+        local: local,
+        idOf: (s) => s.id,
+        isSynced: (s) => s.isSynced,
+        isDeleted: (s) => s.isDeleted,
+        markSynced: (s) => s.copyWith(isSynced: true),
+        sort: (a, b) => b.dateTime.compareTo(a.dateTime),
+      );
 
-      if (unsynced.isEmpty) {
-        state = AsyncValue.data(cloudSales);
-      } else {
-        dev.log(
-          "Merging ${unsynced.length} unsynced sales into UI",
-          name: "SaleProvider",
-        );
+      await SaleTable.saveAllSales(result.toSave);
+      await LocalCacheManager.deleteByIds(SaleTable.tableName, result.toRemove);
 
-        // Create a map of cloud sales for quick lookup
-        final merged = [...cloudSales];
-
-        for (var local in unsynced) {
-          final index = merged.indexWhere((s) => s.id == local.id);
-          if (index != -1) {
-            // If it exists in both, prefer the local version (it has the correct sync status)
-            merged[index] = local;
-          } else if (!local.isDeleted) {
-            // If it's a brand new local sale not yet on the cloud, insert it at the top
-            merged.insert(0, local);
-          }
-        }
-
-        // Sort the final list by date to ensure the UI stays ordered
-        merged.sort((a, b) => b.dateTime.compareTo(a.dateTime));
-
-        state = AsyncValue.data(merged);
-      }
-
-      dev.log("UI updated with Smart Merge data", name: "SaleProvider");
+      state = AsyncValue.data(result.visible);
     } catch (e) {
       dev.log("Silent Cloud Sync Failed: $e", name: "SaleProvider");
     }
@@ -131,7 +117,9 @@ class SaleNotifier extends _$SaleNotifier {
   /// 4. Delete Sale (Optimistic Soft Delete)
   Future<void> deleteSale(String saleId, String businessId) async {
     final currentSales = state.value ?? [];
-    final sale = currentSales.firstWhere((s) => s.id == saleId);
+    final index = currentSales.indexWhere((s) => s.id == saleId);
+    if (index == -1) return;
+    final sale = currentSales[index];
     final deletedMarker = sale.copyWith(isDeleted: true, isSynced: false);
 
     // Remove from UI immediately
@@ -142,11 +130,13 @@ class SaleNotifier extends _$SaleNotifier {
   }
 
   /// 5. Background Sync Engine
-  Future<void> syncPending(String businessId) async {
-    final user = ref.read(currentUserProvider).value;
-    final connectivity = await Connectivity().checkConnectivity();
+  Future<void> syncPending(String businessId) {
+    return SyncLock.run('sales_$businessId', () => _syncPending(businessId));
+  }
 
-    if (user == null || connectivity.contains(ConnectivityResult.none)) return;
+  Future<void> _syncPending(String businessId) async {
+    final user = ref.read(currentUserProvider).value;
+    if (user == null || !await isOnline()) return;
 
     final service = SaleService(uid: user.uid);
     final unsynced = await SaleTable.getUnsyncedSalesByBusiness(businessId);

@@ -1,4 +1,3 @@
-import 'dart:developer' as dev;
 import 'package:googleapis_auth/auth_io.dart';
 
 class NotificationServerKey {
@@ -31,7 +30,7 @@ class NotificationServerKey {
     );
 
     final accessServerKey = client.credentials.accessToken.data;
-    dev.log("ACCESS TOKEN => $accessServerKey");
+    client.close();
 
     return accessServerKey;
   }

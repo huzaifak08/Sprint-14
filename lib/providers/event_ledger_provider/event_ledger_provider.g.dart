@@ -35,7 +35,7 @@ final class EventLedgerNotifierProvider
 }
 
 String _$eventLedgerNotifierHash() =>
-    r'219ecb47be4947637793b65494b36aea44f80790';
+    r'dcb858a9dc7ae6b6ce03388b8f775da9acafa14e';
 
 abstract class _$EventLedgerNotifier
     extends $AsyncNotifier<List<EventLedgerModel>> {
@@ -108,7 +108,7 @@ final class ActiveEventTransactionsProvider
 }
 
 String _$activeEventTransactionsHash() =>
-    r'3330ef99ead4364187e1b0c4f82f247cd77ed79a';
+    r'864d94f744487503f9c9261806ccb2b3786da145';
 
 final class ActiveEventTransactionsFamily extends $Family
     with
@@ -212,7 +212,7 @@ final class EventParticipantsRosterProvider
 }
 
 String _$eventParticipantsRosterHash() =>
-    r'6823a1dfede1382868db93115c7e2aaa74855c04';
+    r'226a0deca2bb77da152acd68785b4e63c78f800e';
 
 final class EventParticipantsRosterFamily extends $Family
     with
@@ -344,14 +344,8 @@ final class SingleEventLedgerFamily extends $Family
   String toString() => r'singleEventLedgerProvider';
 }
 
-/// Dynamic Roster Dropdown Category Aggregator Lookup Provider.
-/// Pulls unique strings used in existing local transaction categories to feed custom workspace entries.
-
 @ProviderFor(dynamicEventCategories)
 final dynamicEventCategoriesProvider = DynamicEventCategoriesFamily._();
-
-/// Dynamic Roster Dropdown Category Aggregator Lookup Provider.
-/// Pulls unique strings used in existing local transaction categories to feed custom workspace entries.
 
 final class DynamicEventCategoriesProvider
     extends
@@ -361,8 +355,6 @@ final class DynamicEventCategoriesProvider
           FutureOr<List<String>>
         >
     with $FutureModifier<List<String>>, $FutureProvider<List<String>> {
-  /// Dynamic Roster Dropdown Category Aggregator Lookup Provider.
-  /// Pulls unique strings used in existing local transaction categories to feed custom workspace entries.
   DynamicEventCategoriesProvider._({
     required DynamicEventCategoriesFamily super.from,
     required String super.argument,
@@ -411,9 +403,6 @@ final class DynamicEventCategoriesProvider
 String _$dynamicEventCategoriesHash() =>
     r'48b8808844c4306c30dbf18664fde59ab262ba8c';
 
-/// Dynamic Roster Dropdown Category Aggregator Lookup Provider.
-/// Pulls unique strings used in existing local transaction categories to feed custom workspace entries.
-
 final class DynamicEventCategoriesFamily extends $Family
     with $FunctionalFamilyOverride<FutureOr<List<String>>, String> {
   DynamicEventCategoriesFamily._()
@@ -424,9 +413,6 @@ final class DynamicEventCategoriesFamily extends $Family
         $allTransitiveDependencies: null,
         isAutoDispose: true,
       );
-
-  /// Dynamic Roster Dropdown Category Aggregator Lookup Provider.
-  /// Pulls unique strings used in existing local transaction categories to feed custom workspace entries.
 
   DynamicEventCategoriesProvider call(String eventId) =>
       DynamicEventCategoriesProvider._(argument: eventId, from: this);
@@ -493,7 +479,7 @@ final class EventFinancialSummaryProvider
 }
 
 String _$eventFinancialSummaryHash() =>
-    r'c23c4abdadc3c77ebecaccf780dbd7f3fe011c6b';
+    r'fb025d3fda8a5398fa9f60156e19c8f7e312a241';
 
 final class EventFinancialSummaryFamily extends $Family
     with $FunctionalFamilyOverride<FutureOr<EventFinancialSummary>, String> {

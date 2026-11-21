@@ -1,12 +1,13 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:sprint_14/cache/sync/pending_sync.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:sprint_14/clients/notifications/notification_cloud_service.dart';
 import 'package:sprint_14/providers/biometric_provider/biometric_provider.dart';
-import 'package:sprint_14/providers/ledger_provider/ledger_provider.dart';
 import 'package:sprint_14/providers/notification_provider/notification_provider.dart';
 import 'package:sprint_14/services/biometric_service.dart';
 import 'package:sprint_14/views/add_or_update_ledger_view.dart';
@@ -29,6 +30,7 @@ class _HomeViewState extends ConsumerState<HomeView>
   late PageController _pageController;
   final NotificationCloudService _notificationService =
       NotificationCloudService();
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
 
   @override
   void initState() {
@@ -47,12 +49,11 @@ class _HomeViewState extends ConsumerState<HomeView>
     _notificationService.setUpInteractMessage(context);
     _notificationService.subscribeToAll();
 
-    Connectivity().onConnectivityChanged.listen((result) {
-      if (result.contains(ConnectivityResult.wifi) ||
-          result.contains(ConnectivityResult.mobile)) {
-        // ref.read(projectNotifierProvider.notifier).syncPendingProjects();
-        ref.read(ledgerProvider.notifier).syncPendingLedgers();
-        ref.read(notificationProvider.notifier).syncPendingNotifications();
+    // Upload everything that was changed offline once we're back online.
+    _connectivitySub = Connectivity().onConnectivityChanged.listen((result) {
+      if (!mounted) return;
+      if (result.any((r) => r != ConnectivityResult.none)) {
+        syncAllPending(ref.read);
       }
     });
   }
@@ -71,6 +72,7 @@ class _HomeViewState extends ConsumerState<HomeView>
 
   @override
   void dispose() {
+    _connectivitySub?.cancel();
     _pageController.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();

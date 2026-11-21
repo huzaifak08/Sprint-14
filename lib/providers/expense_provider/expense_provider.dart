@@ -1,6 +1,9 @@
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:sprint_14/cache/init_cache.dart';
+import 'package:sprint_14/cache/sync/sync_merge.dart';
+import 'package:sprint_14/cache/sync/sync_utils.dart';
 import 'package:sprint_14/cache/tables/expense_table.dart';
+import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
 import 'package:sprint_14/models/expense_model.dart';
 import 'package:sprint_14/services/expense_service.dart';
 import 'dart:developer' as dev;
@@ -11,6 +14,10 @@ part 'expense_provider.g.dart';
 class ExpenseNotifier extends _$ExpenseNotifier {
   @override
   Future<List<ExpenseModel>> build(String businessId) async {
+    // Rebuild on login/logout so another account's data is never shown.
+    final user = ref.watch(authControllerProvider).value;
+    if (user == null) return [];
+
     // 1. Load from Local Cache immediately for fast UI response
     final cache = await ExpenseTable.getAllExpensesFromCache(businessId);
 
@@ -23,30 +30,40 @@ class ExpenseNotifier extends _$ExpenseNotifier {
   /// --- 1. Cloud Fetch & Merge ---
   Future<void> _fetchAndSyncFromCloud(String businessId) async {
     try {
-      final service = ExpenseService(businessId: businessId);
-      final cloud = await service.getAllExpenses();
-      final currentList = state.value ?? [];
+      // Offline, Firestore answers from its partial cache; skip so nothing
+      // is mistaken for a remote deletion.
+      if (!await isOnline()) return;
 
-      final Map<String, ExpenseModel> currentMap = {
-        for (final e in currentList) e.id: e,
-      };
-      final List<ExpenseModel> merged = [];
+      // Push pending local changes first so the fetch reflects them.
+      await syncPending(businessId);
 
-      for (final c in cloud) {
-        final local = currentMap[c.id];
-        // If local exists and is not synced, keep local (it has pending changes)
-        if (local != null && !local.isSynced) {
-          merged.add(local);
-        } else {
-          merged.add(c.copyWith(isSynced: true));
-        }
-      }
+      final cloud = await ExpenseService(
+        businessId: businessId,
+      ).getAllExpenses();
 
-      await ExpenseTable.saveAllFetchedExpenses(merged);
-      state = AsyncData(merged);
+      final localRows = await LocalCacheManager.queryAllRows(
+        ExpenseTable.tableName,
+        where: 'businessId = ?',
+        whereArgs: [businessId],
+      );
+      final local = localRows.map(ExpenseModel.fromJsonDb).toList();
 
-      // Attempt to push any locally created/edited expenses to the cloud
-      syncPending(businessId);
+      final result = mergeCloudWithLocal<ExpenseModel>(
+        cloud: cloud,
+        local: local,
+        idOf: (e) => e.id,
+        isSynced: (e) => e.isSynced,
+        isDeleted: (e) => e.isDeleted,
+        markSynced: (e) => e.copyWith(isSynced: true),
+        sort: (a, b) => b.dateTime.compareTo(a.dateTime),
+      );
+
+      await ExpenseTable.saveAllFetchedExpenses(result.toSave);
+      await LocalCacheManager.deleteByIds(
+        ExpenseTable.tableName,
+        result.toRemove,
+      );
+      state = AsyncData(result.visible);
     } catch (e) {
       dev.log("Cloud Expense Fetch Error: $e", name: "ExpenseProvider");
     }
@@ -80,7 +97,9 @@ class ExpenseNotifier extends _$ExpenseNotifier {
   /// --- 4. Delete Expense (Soft Delete) ---
   Future<void> deleteExpense(String id, String businessId) async {
     final current = state.value ?? [];
-    final expense = current.firstWhere((e) => e.id == id);
+    final index = current.indexWhere((e) => e.id == id);
+    if (index == -1) return;
+    final expense = current[index];
     final deletedMarker = expense.copyWith(isDeleted: true, isSynced: false);
 
     // Remove from UI list immediately
@@ -91,12 +110,19 @@ class ExpenseNotifier extends _$ExpenseNotifier {
   }
 
   /// --- 5. Background Sync Logic ---
-  Future<void> syncPending(String businessId) async {
-    final connectivity = await Connectivity().checkConnectivity();
-    if (connectivity.contains(ConnectivityResult.none)) return;
+  Future<void> syncPending(String businessId) {
+    return SyncLock.run('expenses_$businessId', () => _syncPending(businessId));
+  }
+
+  Future<void> _syncPending(String businessId) async {
+    if (!await isOnline()) return;
 
     final service = ExpenseService(businessId: businessId);
-    final unsynced = await ExpenseTable.getUnsyncedExpenses();
+    // Only this business's rows: uploading another business's expenses here
+    // would write them into the wrong Firestore collection.
+    final unsynced = (await ExpenseTable.getUnsyncedExpenses())
+        .where((e) => e.businessId == businessId)
+        .toList();
 
     for (final e in unsynced) {
       try {
@@ -121,9 +147,9 @@ class ExpenseNotifier extends _$ExpenseNotifier {
               if (item.id == synced.id) synced else item,
           ]);
         }
-      } catch (e) {
+      } catch (err) {
         dev.log(
-          "Sync Failed for expense ${e.toString()}: $e",
+          "Sync failed for expense ${e.id}: $err",
           name: "ExpenseProvider",
         );
       }

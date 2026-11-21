@@ -1,5 +1,8 @@
 import 'dart:async';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:sprint_14/cache/init_cache.dart';
+import 'package:sprint_14/cache/sync/sync_merge.dart';
+import 'package:sprint_14/cache/sync/sync_utils.dart';
 import 'package:sprint_14/cache/tables/participant_table.dart';
 import 'package:sprint_14/models/participant_model.dart';
 import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
@@ -55,8 +58,26 @@ class ParticipantNotifier extends _$ParticipantNotifier {
         .streamBusinessParticipants(businessId)
         .listen(
           (cloudList) async {
-            await ParticipantTable.saveAllFetchedParticipants(cloudList);
-            state = AsyncData(cloudList);
+            final localRows = await LocalCacheManager.queryAllRows(
+              ParticipantTable.tableName,
+              where: 'businessId = ?',
+              whereArgs: [businessId],
+            );
+            final local = localRows.map(ParticipantModel.fromJsonDb).toList();
+
+            // Role/status changes made offline stay visible until uploaded.
+            final result = mergeCloudWithLocal<ParticipantModel>(
+              cloud: cloudList,
+              local: local,
+              idOf: (p) => p.id,
+              isSynced: (p) => p.isSynced,
+              isDeleted: (p) => p.isDeleted,
+              markSynced: (p) => p.copyWith(isSynced: true),
+              pruneMissing: false,
+            );
+
+            await ParticipantTable.saveAllFetchedParticipants(result.toSave);
+            state = AsyncData(result.visible);
           },
           onError: (error) {
             dev.log(
@@ -193,7 +214,12 @@ class ParticipantNotifier extends _$ParticipantNotifier {
   }
 
   /// --- BACKSTAGE CORE ENGINE: SYNC ALL PENDING MODIFICATIONS ---
-  Future<void> syncPendingParticipants() async {
+  Future<void> syncPendingParticipants() {
+    return SyncLock.run('participants', _syncPendingParticipants);
+  }
+
+  Future<void> _syncPendingParticipants() async {
+    if (!await isOnline()) return;
     dev.log(
       "Running background synchronization for participants ledger...",
       name: "ParticipantProvider",

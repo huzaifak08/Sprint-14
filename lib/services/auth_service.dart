@@ -49,7 +49,8 @@ class AuthService {
         UserModel newUser = UserModel(
           uid: credential.user!.uid,
           name: name,
-          email: email,
+          // Stored normalised so invite-by-email lookups match.
+          email: email.trim().toLowerCase(),
           password: password,
           deviceTokens: [],
           createdAt: DateTime.now(),

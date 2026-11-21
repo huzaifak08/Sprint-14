@@ -1,5 +1,6 @@
 import 'dart:developer' as dev;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:sprint_14/cache/sync/sync_utils.dart';
 import 'package:sprint_14/helpers/constants.dart';
 import 'package:sprint_14/models/business_model.dart';
 
@@ -48,14 +49,18 @@ class BusinessService {
         name: "BusinessService",
       );
 
-      // Firestore 'whereIn' supports checking collections of up to 30 elements per pass
-      final snapshot = await _businessRef
-          .where(FieldPath.documentId, whereIn: businessIds)
-          .get();
-
-      final businesses = snapshot.docs.map((doc) {
-        return BusinessModel.fromMap({...doc.data(), 'id': doc.id});
-      }).toList();
+      // Firestore 'whereIn' accepts at most 30 values, so query in chunks.
+      final businesses = <BusinessModel>[];
+      for (final chunk in chunked(businessIds)) {
+        final snapshot = await _businessRef
+            .where(FieldPath.documentId, whereIn: chunk)
+            .get();
+        businesses.addAll(
+          snapshot.docs.map(
+            (doc) => BusinessModel.fromMap({...doc.data(), 'id': doc.id}),
+          ),
+        );
+      }
 
       // Sort locally by design preferences since 'whereIn' cannot be combined easily with dynamic orderBys
       businesses.sort((a, b) => b.createdAt.compareTo(a.createdAt));

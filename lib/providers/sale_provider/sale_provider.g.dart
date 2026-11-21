@@ -50,7 +50,7 @@ final class SaleNotifierProvider
   }
 }
 
-String _$saleNotifierHash() => r'93404a7bb2e14f69a6f8be6c4aef7b99e91d9047';
+String _$saleNotifierHash() => r'869dbddb2f19907fb04642258d480d376b309360';
 
 final class SaleNotifierFamily extends $Family
     with

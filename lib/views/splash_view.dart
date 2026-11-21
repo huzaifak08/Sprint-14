@@ -74,83 +74,78 @@ class _SplashViewState extends ConsumerState<SplashView>
   Future<void> _handleNavigation() async {
     dev.log('🚀 Navigation sequence initiated', name: 'SplashView');
 
-    await Future.delayed(const Duration(milliseconds: 2500));
-
-    if (!mounted) return;
-
-    // 1. 🔥 FIRST: Wait for the UserProvider to be ready
-    // This ensures the BusinessNotifier has a UID when it builds.
-    dev.log('👤 Waiting for User session...', name: 'SplashView');
-    final user = await ref.read(currentUserProvider.future);
-
-    if (user == null) {
-      dev.log(
-        '❌ No user session found. Navigating to SignInView.',
-        name: 'SplashView',
-      );
-      _navigate(const SignInView());
-      return;
-    }
-
-    // 2. 🔥 SECOND: Now that we have a user, get the businesses
-    dev.log(
-      '📦 User ready. Initializing and awaiting Business list...',
-      name: 'SplashView',
-    );
+    // Minimum splash time runs alongside loading instead of before it.
+    final minSplash = Future.delayed(const Duration(milliseconds: 1800));
 
     try {
+      // 1. The Firebase session decides signed-in vs signed-out. The
+      //    Firestore profile can be missing offline; that's not a logout.
+      final authUser = await ref.read(authControllerProvider.future);
+
+      if (authUser == null) {
+        await minSplash;
+        if (!mounted) return;
+        dev.log('❌ No session. Navigating to SignInView.', name: 'SplashView');
+        _navigate(const SignInView());
+        return;
+      }
+
+      if (!authUser.emailVerified) {
+        await minSplash;
+        if (!mounted) return;
+        _navigate(const VerifyEmailView());
+        return;
+      }
+
+      // 2. Warm up the profile (BusinessNotifier needs it); don't block on
+      //    failures, Home can work from cache.
+      try {
+        await ref.read(currentUserProvider.future);
+      } catch (e) {
+        dev.log('Profile load failed, continuing: $e', name: 'SplashView');
+      }
+
+      // 3. Default business shortcut.
       final List<BusinessModel> businessList = await ref.read(
         businessProvider.future,
       );
-      dev.log(
-        '✅ Business list loaded. Items found: ${businessList.length}',
-        name: 'SplashView',
-      );
+      final settings = await ref.read(appSettingsProvider.future);
+      final targetId = settings.defaultBusinessId;
 
-      final authState = ref.read(authControllerProvider);
-      final settingsAsync = ref.read(appSettingsProvider);
+      await minSplash;
+      if (!mounted) return;
 
-      authState.when(
-        data: (user) {
-          if (user?.emailVerified == false) {
-            _navigate(const VerifyEmailView());
-          } else {
-            final settings = settingsAsync.value;
-            final targetId = settings?.defaultBusinessId;
+      if (targetId != null) {
+        final business = businessList.cast<BusinessModel?>().firstWhere(
+          (b) => b?.id == targetId,
+          orElse: () => null,
+        );
 
-            if (targetId != null) {
-              final business = businessList.cast<BusinessModel?>().firstWhere(
-                (b) => b?.id == targetId,
-                orElse: () => null,
-              );
+        if (business != null) {
+          dev.log(
+            '🎯 Match found: ${business.name}. Navigating to Dashboard.',
+            name: 'SplashView',
+          );
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (context) => const HomeView()),
+            (route) => false,
+          );
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => BusinessDashboardView(businessId: business.id),
+            ),
+          );
+          return;
+        }
+      }
 
-              if (business != null) {
-                dev.log(
-                  '🎯 Match found: ${business.name}. Navigating to Dashboard.',
-                  name: 'SplashView',
-                );
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (context) => const HomeView()),
-                  (route) => false,
-                );
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        BusinessDashboardView(businessId: business.id),
-                  ),
-                );
-                return;
-              }
-            }
-            _navigate(const HomeView());
-          }
-        },
-        loading: () => _handleNavigation(),
-        error: (e, s) => _navigate(const SignInView()),
-      );
+      _navigate(const HomeView());
     } catch (e, s) {
       dev.log('🚨 Failed: $e', name: 'SplashView', error: e, stackTrace: s);
-      _navigate(const HomeView());
+      await minSplash;
+      if (!mounted) return;
+      final signedIn = ref.read(authControllerProvider).value != null;
+      _navigate(signedIn ? const HomeView() : const SignInView());
     }
   }
 

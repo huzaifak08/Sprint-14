@@ -52,7 +52,7 @@ final class ParticipantNotifierProvider
 }
 
 String _$participantNotifierHash() =>
-    r'08ae75556611c2da24517fcd1b8ebbdb7a679178';
+    r'2c0ba8867726e6b611adf9f2cc48c35a7330a3e7';
 
 final class ParticipantNotifierFamily extends $Family
     with

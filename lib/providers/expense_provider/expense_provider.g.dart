@@ -50,7 +50,7 @@ final class ExpenseNotifierProvider
   }
 }
 
-String _$expenseNotifierHash() => r'10450bb9c000b3d5e58832db8832a59b749457af';
+String _$expenseNotifierHash() => r'9ece62e7f4e3328341966a6aa6e9bec06c4048a7';
 
 final class ExpenseNotifierFamily extends $Family
     with
