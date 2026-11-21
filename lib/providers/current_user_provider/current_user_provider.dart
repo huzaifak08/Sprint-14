@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:sprint_14/cache/sync/sync_utils.dart';
 import 'package:sprint_14/cache/tables/user_table.dart';
 import 'package:sprint_14/models/user_model.dart';
 import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
@@ -76,55 +77,86 @@ class CurrentUserNotifier extends _$CurrentUserNotifier {
   }
 
   /// --- PROFILE ACTIONS ---
-  Future<void> updateProfile({
-    required UserModel updatedUser,
-    File? imageFile,
-  }) async {
-    final previousState = state;
+  /// All edits are saved locally first and shown immediately, then uploaded
+  /// in the background. (Waiting for Firestore made edits hang offline,
+  /// because a Firestore write only completes once it reaches the server.)
 
-    final localUpdate = updatedUser.copyWith(
-      isSynced: false,
-      profilePic: imageFile?.path ?? updatedUser.profilePic,
-    );
-    state = AsyncData(localUpdate);
-    await UserTable.saveUser(localUpdate);
-
-    try {
-      String? finalImageUrl = updatedUser.profilePic;
-
-      if (imageFile != null) {
-        finalImageUrl = await StorageService().uploadProfilePic(
-          updatedUser.uid,
-          imageFile,
-        );
-      }
-
-      final userToSync = localUpdate.copyWith(
-        profilePic: finalImageUrl,
-        isSynced: true,
-      );
-      await _userService.saveOrUpdateUser(userToSync);
-
-      await UserTable.saveUser(userToSync);
-      state = AsyncData(userToSync);
-    } catch (e) {
-      dev.log("Update Failed: $e");
-      state = previousState;
-    }
+  Future<void> _applyLocal(UserModel updated) async {
+    final local = updated.copyWith(isSynced: false);
+    state = AsyncData(local);
+    await UserTable.saveUser(local);
   }
 
-  /// --- MANUAL SYNC ---
-  Future<void> syncPendingData() async {
+  Future<void> updateName(String name) async {
+    final user = state.value;
+    if (user == null || name.trim().isEmpty || name.trim() == user.name) return;
+    await _applyLocal(user.copyWith(name: name.trim()));
+    syncPendingData();
+  }
+
+  /// Returns true if the photo reached the cloud now; false means it is saved
+  /// on this device and will upload once online.
+  Future<bool> updateProfilePicture(File imageFile) async {
+    final user = state.value;
+    if (user == null) return false;
+    await _applyLocal(user.copyWith(profilePic: imageFile.path));
+    await syncPendingData();
+    return state.value?.isSynced ?? false;
+  }
+
+  Future<void> removeProfilePicture() async {
+    final user = state.value;
+    if (user == null || user.profilePic == null) return;
+    final hadCloudPhoto = user.profilePic!.startsWith('http');
+    await _applyLocal(user.copyWith(clearProfilePic: true));
+    if (hadCloudPhoto) StorageService().deleteProfilePic(user.uid);
+    syncPendingData();
+  }
+
+  /// --- UPLOAD PENDING PROFILE CHANGES ---
+  Future<void> syncPendingData() {
+    return SyncLock.run('profile', _syncPendingProfile);
+  }
+
+  Future<void> _syncPendingProfile() async {
     final user = state.value;
     if (user == null || user.isSynced) return;
+    if (!await isOnline()) return;
 
     try {
-      await _userService.saveOrUpdateUser(user);
-      final synced = user.copyWith(isSynced: true);
+      var toUpload = user;
+      final pic = user.profilePic;
+
+      // A local file path must be uploaded first; never store a device path
+      // in Firestore (other devices can't open it).
+      if (pic != null && pic.isNotEmpty && !pic.startsWith('http')) {
+        final file = File(pic);
+        if (!await file.exists()) {
+          toUpload = toUpload.copyWith(clearProfilePic: true);
+        } else {
+          final url = await StorageService().uploadProfilePic(user.uid, file);
+          if (url == null) return; // stay unsynced, retry later
+          toUpload = toUpload.copyWith(profilePic: url);
+        }
+      }
+
+      await _userService
+          .saveOrUpdateUser(toUpload)
+          .timeout(const Duration(seconds: 20));
+
+      // Only mark synced if nothing changed while uploading; otherwise the
+      // newer edit stays pending and is uploaded on the next pass.
+      final latest = state.value;
+      if (latest == null ||
+          latest.name != user.name ||
+          latest.profilePic != user.profilePic) {
+        return;
+      }
+      final synced = toUpload.copyWith(isSynced: true);
       await UserTable.saveUser(synced);
       state = AsyncData(synced);
     } catch (e) {
-      dev.log("Manual Sync Failed: $e");
+      dev.log("Profile sync failed: $e", name: "CurrentUserProvider");
     }
   }
 

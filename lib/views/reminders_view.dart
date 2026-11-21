@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sprint_14/providers/reminders_provider/reminders_provider.dart';
-import 'package:sprint_14/providers/theme_provider/theme_provider.dart';
 import 'package:sprint_14/views/add_reminder_view.dart';
 
 class RemindersView extends ConsumerWidget {
@@ -52,7 +51,7 @@ class RemindersView extends ConsumerWidget {
   ) {
     return Container(
       decoration: BoxDecoration(
-        color: ref.watch(themeNotifier).themeMode == ThemeMode.light
+        color: Theme.of(context).brightness == Brightness.light
             ? Colors.white
             : Colors.black,
         borderRadius: BorderRadius.circular(16),

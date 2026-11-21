@@ -56,7 +56,7 @@ class MyApp extends ConsumerWidget {
           title: 'Sprint14',
           theme: lightTheme,
           darkTheme: darkTheme,
-          themeMode: config.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+          themeMode: config.themeMode,
           initialRoute: RouteName.splashView,
           onGenerateRoute: Routes.generateRoute,
         );

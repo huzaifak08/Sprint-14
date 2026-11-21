@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:sprint_14/cache/tables/settings_table.dart';
 import 'package:sprint_14/models/app_settings_model.dart';
@@ -11,28 +12,32 @@ class AppSettingsNotifier extends _$AppSettingsNotifier {
     return await SettingsTable.getSettings();
   }
 
-  Future<void> updateTheme(bool isDark) async {
-    final current = state.value ?? AppSettingsModel();
-    final updated = AppSettingsModel(
-      isDarkMode: isDark,
-      defaultBusinessId: current.defaultBusinessId,
-    );
+  Future<void> _save(AppSettingsModel updated) async {
     state = AsyncData(updated);
     await SettingsTable.saveSettings(updated);
   }
 
+  Future<void> setThemeMode(ThemeMode mode) async {
+    final current = state.value ?? const AppSettingsModel();
+    if (current.themeMode == mode) return;
+    await _save(current.copyWith(themeMode: mode));
+  }
+
+  /// [businessId] null = open the normal Home screen on launch.
   Future<void> updateLandingPage(String? businessId) async {
-    final current = state.value ?? AppSettingsModel();
-    final updated = AppSettingsModel(
-      isDarkMode: current.isDarkMode,
-      defaultBusinessId: businessId,
+    final current = state.value ?? const AppSettingsModel();
+    await _save(
+      current.copyWith(
+        defaultBusinessId: businessId,
+        clearDefaultBusiness: businessId == null,
+      ),
     );
-    state = AsyncData(updated);
-    await SettingsTable.saveSettings(updated);
   }
 }
 
+/// App version from the native side, or null when it can't be read.
 @riverpod
-Future<String> appVersion(Ref ref) async {
-  return await NativeInfoService.getAppVersion();
+Future<String?> appVersion(Ref ref) async {
+  final version = await NativeInfoService.getAppVersion();
+  return version == NativeInfoService.unknownVersion ? null : version;
 }

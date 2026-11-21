@@ -76,6 +76,23 @@ class _HomeViewState extends ConsumerState<HomeView>
     }
   }
 
+  // Re-lock after the app has been in the background for a while.
+  static const _relockAfter = Duration(seconds: 30);
+  DateTime? _backgroundedAt;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      _backgroundedAt = DateTime.now();
+    } else if (state == AppLifecycleState.resumed) {
+      final since = _backgroundedAt;
+      _backgroundedAt = null;
+      if (since != null && DateTime.now().difference(since) >= _relockAfter) {
+        ref.read(securityProvider.notifier).lock();
+      }
+    }
+  }
+
   @override
   void dispose() {
     _connectivitySub?.cancel();

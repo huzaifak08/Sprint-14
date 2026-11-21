@@ -211,6 +211,9 @@ class LocalCacheManager {
     return false;
   }
 
+  /// Wipes all user data. Device preferences (theme) are kept so logging
+  /// out doesn't reset the look of the app; the start-screen business is
+  /// cleared because it belongs to the signed-out account.
   static Future<void> deleteAllCacheData() async {
     final db = await getDatabase();
     final tables = await db.rawQuery(
@@ -218,7 +221,9 @@ class LocalCacheManager {
     );
     for (var table in tables) {
       final tableName = table['name'].toString();
+      if (tableName == SettingsTable.tableName) continue;
       await db.delete(tableName);
     }
+    await db.update(SettingsTable.tableName, {'defaultBusinessId': null});
   }
 }

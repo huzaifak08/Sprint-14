@@ -42,13 +42,14 @@ class UserModel {
     bool? isEmailVerified,
     bool? isSynced,
     DateTime? lastSyncAttempt,
+    bool clearProfilePic = false,
   }) {
     return UserModel(
       uid: uid ?? this.uid,
       name: name ?? this.name,
       email: email ?? this.email,
       password: password ?? this.password,
-      profilePic: profilePic ?? this.profilePic,
+      profilePic: clearProfilePic ? null : (profilePic ?? this.profilePic),
       deviceTokens: deviceTokens ?? this.deviceTokens,
       createdAt: createdAt ?? this.createdAt,
       isEmailVerified: isEmailVerified ?? this.isEmailVerified,

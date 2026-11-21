@@ -34,7 +34,7 @@ final class AppSettingsNotifierProvider
 }
 
 String _$appSettingsNotifierHash() =>
-    r'84ec15961430b9ac09fd06a0a5866f77ff5c0b15';
+    r'e4f7b0853f3bd2e6734cdc0852a604bb2eb91544';
 
 abstract class _$AppSettingsNotifier extends $AsyncNotifier<AppSettingsModel> {
   FutureOr<AppSettingsModel> build();
@@ -55,12 +55,17 @@ abstract class _$AppSettingsNotifier extends $AsyncNotifier<AppSettingsModel> {
   }
 }
 
+/// App version from the native side, or null when it can't be read.
+
 @ProviderFor(appVersion)
 final appVersionProvider = AppVersionProvider._();
 
+/// App version from the native side, or null when it can't be read.
+
 final class AppVersionProvider
-    extends $FunctionalProvider<AsyncValue<String>, String, FutureOr<String>>
-    with $FutureModifier<String>, $FutureProvider<String> {
+    extends $FunctionalProvider<AsyncValue<String?>, String?, FutureOr<String?>>
+    with $FutureModifier<String?>, $FutureProvider<String?> {
+  /// App version from the native side, or null when it can't be read.
   AppVersionProvider._()
     : super(
         from: null,
@@ -77,13 +82,13 @@ final class AppVersionProvider
 
   @$internal
   @override
-  $FutureProviderElement<String> $createElement($ProviderPointer pointer) =>
+  $FutureProviderElement<String?> $createElement($ProviderPointer pointer) =>
       $FutureProviderElement(pointer);
 
   @override
-  FutureOr<String> create(Ref ref) {
+  FutureOr<String?> create(Ref ref) {
     return appVersion(ref);
   }
 }
 
-String _$appVersionHash() => r'1fb0e4363f0eb733640adac4d69b88bb08767673';
+String _$appVersionHash() => r'60d91b6e6c46c0dab2f00b63ba109d08171b0e06';

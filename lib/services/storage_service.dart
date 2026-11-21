@@ -23,6 +23,20 @@ class StorageService {
     }
   }
 
+  /// Best effort: a missing file is fine.
+  Future<void> deleteProfilePic(String uid) async {
+    try {
+      await _storage
+          .ref()
+          .child('users')
+          .child(uid)
+          .child('profile_pic.jpg')
+          .delete();
+    } catch (e) {
+      dev.log("Profile pic delete skipped: $e");
+    }
+  }
+
   Future<String?> uploadBusinessLogo(String businessId, File imageFile) async {
     try {
       dev.log("Uploading logo for business: $businessId");

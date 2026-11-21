@@ -50,7 +50,7 @@ final class ProductNotifierProvider
   }
 }
 
-String _$productNotifierHash() => r'db57e46d88fb143258e4d7c5a2663672cb63f4ca';
+String _$productNotifierHash() => r'eb6e2fe50b264bdbfa3da8215e34435d09d2e1ed';
 
 final class ProductNotifierFamily extends $Family
     with

@@ -33,7 +33,7 @@ final class LedgerNotifierProvider
   LedgerNotifier create() => LedgerNotifier();
 }
 
-String _$ledgerNotifierHash() => r'ba4868c9174f73c8756e211cce70fe5e7f209c93';
+String _$ledgerNotifierHash() => r'48edd2bcfe396cf1c6b37a82e07383b3791a48c8';
 
 abstract class _$LedgerNotifier extends $AsyncNotifier<List<LedgerModel>> {
   FutureOr<List<LedgerModel>> build();

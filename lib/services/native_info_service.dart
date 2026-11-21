@@ -4,6 +4,7 @@ import 'package:sprint_14/helpers/constants.dart';
 
 class NativeInfoService {
   static const _channel = MethodChannel(methodChannel);
+  static const String unknownVersion = "Unknown Version";
 
   static Future<String> getAppVersion() async {
     try {
@@ -14,7 +15,7 @@ class NativeInfoService {
         "Failed to fetch native app version: '${e.message}'.",
         name: "NativeInfoService",
       );
-      return "Unknown Version";
+      return unknownVersion;
     }
   }
 }
