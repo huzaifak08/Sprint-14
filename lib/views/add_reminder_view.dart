@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sprint_14/components/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:sprint_14/helpers/app_data.dart';
@@ -156,9 +157,7 @@ class _AddReminderViewState extends ConsumerState<AddReminderView> {
                           );
 
                       Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Reminder Scheduled!')),
-                      );
+                      AppToast.success('Reminder scheduled');
                     }
                   },
                   style: ElevatedButton.styleFrom(

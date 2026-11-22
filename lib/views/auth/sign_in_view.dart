@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:sprint_14/components/app_toast.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_svg/svg.dart';
 import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
 import 'package:sprint_14/services/auth_service.dart';
 import 'package:sprint_14/views/auth/sign_up_view.dart';
 import 'package:sprint_14/views/auth/verify_email_view.dart';
-import 'package:sprint_14/views/home_view.dart';
+import 'package:sprint_14/views/auth/widgets/auth_widgets.dart';
+import 'package:sprint_14/helpers/recent_emails.dart';
+import 'package:sprint_14/services/post_auth_navigation.dart';
 
 class SignInView extends ConsumerStatefulWidget {
   const SignInView({super.key});
@@ -18,11 +21,25 @@ class _SignInViewState extends ConsumerState<SignInView> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passController = TextEditingController();
-
   final _emailFocus = FocusNode();
   final _passFocus = FocusNode();
 
   bool _obscurePass = true;
+  bool _loading = false;
+  List<String> _recentEmails = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    RecentEmails.load().then((list) {
+      if (!mounted) return;
+      setState(() => _recentEmails = list);
+      // One account used before: pre-fill it and jump to the password.
+      if (list.length == 1 && _emailController.text.isEmpty) {
+        _emailController.text = list.first;
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -33,207 +50,148 @@ class _SignInViewState extends ConsumerState<SignInView> {
     super.dispose();
   }
 
-  void _handleSignIn() async {
+  Future<void> _handleSignIn() async {
+    if (_loading) return;
     FocusScope.of(context).unfocus();
-    if (_formKey.currentState!.validate()) {
-      // 1. Call the provider and capture the returned result
-      final AuthResult? result = await ref
-          .read(authControllerProvider.notifier)
-          .signIn(_emailController.text.trim(), _passController.text.trim());
+    if (!_formKey.currentState!.validate()) return;
 
-      // 2. Navigate based on the result
+    setState(() => _loading = true);
+    try {
+      final result = await ref
+          .read(authControllerProvider.notifier)
+          .signIn(_emailController.text, _passController.text);
+      if (!mounted) return;
+      // Lets the password manager offer to save these credentials.
+      TextInput.finishAutofillContext(shouldSave: true);
+      RecentEmails.remember(_emailController.text);
+
+      final navigator = Navigator.of(context);
       if (result == AuthResult.unverified) {
-        if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const VerifyEmailView()),
-          );
-        }
-      } else if (result == AuthResult.success) {
-        if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const HomeView()),
-          );
-        }
+        navigator.pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const VerifyEmailView()),
+          (route) => false,
+        );
+      } else {
+        // Straight in: no second splash screen after signing in.
+        await openSignedInHome(navigator, ref.read);
       }
-      // Note: Errors are already handled by the ref.listen we set up earlier
+    } catch (e) {
+      if (mounted) showAuthError(context, e);
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final authState = ref.watch(authControllerProvider);
-
-    // Error Listener
-    ref.listen<AsyncValue>(authControllerProvider, (prev, next) {
-      next.whenOrNull(
-        error: (e, _) => ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString()),
-            backgroundColor: theme.colorScheme.error,
-            behavior: SnackBarBehavior.floating,
-          ),
-        ),
-      );
-    });
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      body: Container(
-        height: MediaQuery.of(context).size.height,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              theme.colorScheme.primary.withValues(alpha: 0.05),
-              theme.scaffoldBackgroundColor,
-            ],
-          ),
-        ),
+      body: AuthBackground(
         child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 60),
-                  Row(
+          // Top-aligned so the layout doesn't jump when the keyboard opens.
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 40, 24, 24),
+              child: AutofillGroup(
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      SvgPicture.asset("assets/images/logo.svg", width: 60),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "Welcome Back",
-                              style: theme.textTheme.headlineMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 24,
-                              ),
-                            ),
-                            Text(
-                              "Sign in to continue your progress",
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontSize: 13,
-                                color: theme.colorScheme.onSurface.withValues(
-                                  alpha: 0.6,
+                      const AuthHeader(
+                        title: 'Welcome back',
+                        subtitle: 'Sign in to continue your progress',
+                      ),
+                      const SizedBox(height: 36),
+                      AuthEmailField(
+                        controller: _emailController,
+                        focusNode: _emailFocus,
+                        suggestions: _recentEmails,
+                        readOnly: _loading,
+                        onSubmitted: (_) => _passFocus.requestFocus(),
+                      ),
+                      AuthTextField(
+                        label: 'Password',
+                        controller: _passController,
+                        focusNode: _passFocus,
+                        hint: '••••••••',
+                        icon: Icons.lock_outline_rounded,
+                        obscure: _obscurePass,
+                        readOnly: _loading,
+                        textInputAction: TextInputAction.done,
+                        autofillHints: const [AutofillHints.password],
+                        onSubmitted: (_) => _handleSignIn(),
+                        suffix: IconButton(
+                          tooltip: _obscurePass
+                              ? 'Show password'
+                              : 'Hide password',
+                          icon: Icon(
+                            _obscurePass
+                                ? Icons.visibility_rounded
+                                : Icons.visibility_off_rounded,
+                          ),
+                          onPressed: () =>
+                              setState(() => _obscurePass = !_obscurePass),
+                        ),
+                        validator: (v) =>
+                            (v ?? '').isEmpty ? 'Password is required' : null,
+                      ),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: _loading
+                              ? null
+                              : () => showDialog<void>(
+                                  context: context,
+                                  builder: (_) => _ForgotPasswordDialog(
+                                    initialEmail: _emailController.text,
+                                  ),
                                 ),
-                              ),
+                          child: const Text(
+                            'Forgot password?',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      AuthPrimaryButton(
+                        label: 'SIGN IN',
+                        loading: _loading,
+                        onPressed: _handleSignIn,
+                      ),
+                      const SizedBox(height: 24),
+                      Center(
+                        child: TextButton(
+                          onPressed: _loading
+                              ? null
+                              : () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const SignUpView(),
+                                  ),
+                                ),
+                          child: Text.rich(
+                            TextSpan(
+                              style: theme.textTheme.bodyMedium,
+                              children: [
+                                const TextSpan(text: "Don't have an account? "),
+                                TextSpan(
+                                  text: 'Sign up',
+                                  style: TextStyle(
+                                    color: theme.colorScheme.primary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
+                          ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 50),
-                  _buildLabel("Email Address"),
-                  _buildTextField(
-                    controller: _emailController,
-                    focusNode: _emailFocus,
-                    nextFocus: _passFocus,
-                    hint: "yourname@mail.com",
-                    icon: Icons.alternate_email_rounded,
-                    keyboardType: TextInputType.emailAddress,
-                    validator: (v) =>
-                        !v!.contains("@") ? "Enter a valid email" : null,
-                  ),
-                  const SizedBox(height: 8),
-                  _buildLabel("Password"),
-                  _buildTextField(
-                    controller: _passController,
-                    focusNode: _passFocus,
-                    hint: "••••••••",
-                    icon: Icons.lock_outline_rounded,
-                    obscure: _obscurePass,
-                    suffix: IconButton(
-                      icon: Icon(
-                        _obscurePass ? Icons.visibility : Icons.visibility_off,
-                      ),
-                      onPressed: () =>
-                          setState(() => _obscurePass = !_obscurePass),
-                    ),
-                    validator: (v) =>
-                        v!.isEmpty ? "Password is required" : null,
-                  ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: () => _showForgotPassword(context),
-                      child: Text(
-                        "Forgot Password?",
-                        style: TextStyle(
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 30),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton(
-                      onPressed: authState.isLoading ? null : _handleSignIn,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: theme.colorScheme.primary,
-                        foregroundColor: theme.colorScheme.onPrimary,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        elevation: 0,
-                      ),
-                      child: authState.isLoading
-                          ? const SizedBox(
-                              height: 24,
-                              width: 24,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : const Text(
-                              "SIGN IN",
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 1.1,
-                              ),
-                            ),
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  Center(
-                    child: TextButton(
-                      onPressed: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const SignUpView(),
-                        ),
-                      ),
-                      child: RichText(
-                        text: TextSpan(
-                          style: theme.textTheme.bodyMedium,
-                          children: [
-                            const TextSpan(text: "Don't have an account? "),
-                            TextSpan(
-                              text: "Sign Up",
-                              style: TextStyle(
-                                color: theme.colorScheme.primary,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
@@ -241,96 +199,103 @@ class _SignInViewState extends ConsumerState<SignInView> {
       ),
     );
   }
+}
 
-  void _showForgotPassword(BuildContext context) {
-    final emailControl = TextEditingController(text: _emailController.text);
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Reset Password"),
-        content: TextField(
-          controller: emailControl,
-          decoration: const InputDecoration(hintText: "Enter registered email"),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              ref
-                  .read(authControllerProvider.notifier)
-                  .passwordReset(emailControl.text.trim());
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Reset email sent!")),
-              );
+/// Asks for the email, validates it, and reports what really happened.
+class _ForgotPasswordDialog extends StatefulWidget {
+  final String initialEmail;
+  const _ForgotPasswordDialog({required this.initialEmail});
+
+  @override
+  State<_ForgotPasswordDialog> createState() => _ForgotPasswordDialogState();
+}
+
+class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
+  late final _controller = TextEditingController(
+    text: widget.initialEmail.trim(),
+  );
+  String? _error;
+  bool _sending = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final email = _controller.text.trim();
+    final invalid = validateEmail(email);
+    if (invalid != null) {
+      setState(() => _error = invalid);
+      return;
+    }
+    setState(() {
+      _sending = true;
+      _error = null;
+    });
+    try {
+      await AuthService().resetPassword(email);
+      if (!mounted) return;
+      Navigator.pop(context);
+      // Firebase doesn't reveal whether an account exists.
+      AppToast.success(
+        'If an account exists for $email, a reset link is on its way.',
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _sending = false;
+          _error = e.toString();
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Reset password'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("Enter your account's email and we'll send a reset link."),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _controller,
+            autofocus: widget.initialEmail.trim().isEmpty,
+            enabled: !_sending,
+            keyboardType: TextInputType.emailAddress,
+            autofillHints: const [AutofillHints.email],
+            onSubmitted: (_) => _send(),
+            onChanged: (_) {
+              if (_error != null) setState(() => _error = null);
             },
-            child: const Text("Send"),
+            decoration: InputDecoration(
+              labelText: 'Email',
+              errorText: _error,
+              border: const OutlineInputBorder(),
+            ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildLabel(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 4, bottom: 8, top: 12),
-      child: Text(
-        text,
-        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-      ),
-    );
-  }
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required FocusNode focusNode,
-    FocusNode? nextFocus,
-    required String hint,
-    required IconData icon,
-    bool obscure = false,
-    Widget? suffix,
-    TextInputType? keyboardType,
-    String? Function(String?)? validator,
-  }) {
-    return TextFormField(
-      controller: controller,
-      focusNode: focusNode,
-      obscureText: obscure,
-      keyboardType: keyboardType,
-      textInputAction: nextFocus != null
-          ? TextInputAction.next
-          : TextInputAction.done,
-      onFieldSubmitted: (_) => nextFocus != null
-          ? FocusScope.of(context).requestFocus(nextFocus)
-          : _handleSignIn(),
-      validator: validator,
-      decoration: InputDecoration(
-        hintText: hint,
-        prefixIcon: Icon(icon, size: 22),
-        suffixIcon: suffix,
-        filled: true,
-        fillColor: Theme.of(context).colorScheme.surface,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide.none,
+      actions: [
+        TextButton(
+          onPressed: _sending ? null : () => Navigator.pop(context),
+          child: const Text('Cancel'),
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(
-            color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
-          ),
+        FilledButton(
+          onPressed: _sending ? null : _send,
+          child: _sending
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Send link'),
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(
-            color: Theme.of(context).colorScheme.primary,
-            width: 1.5,
-          ),
-        ),
-      ),
+      ],
     );
   }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sprint_14/components/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sprint_14/models/notification_model.dart';
 import 'package:sprint_14/providers/notification_provider/notification_provider.dart';
@@ -140,9 +141,7 @@ class NotificationsView extends ConsumerWidget {
   }
 
   void _showSnackBar(BuildContext context, String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating),
-    );
+    AppToast.success(msg);
   }
 }
 

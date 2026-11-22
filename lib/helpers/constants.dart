@@ -21,7 +21,6 @@ const String methodChannel = "flutter_channel";
 // Method Channel Methods:
 const String getAppVersionMethod = "getAppVersion";
 
-
 final allSteps = [
   'Step 1: Console Setup',
   'Step 2: Verification',

@@ -6,172 +6,205 @@ import 'package:sprint_14/services/user_service.dart';
 
 enum AuthResult { success, unverified, error }
 
+/// A user-facing auth error. [message] is safe to show in the UI.
+class AuthFailure implements Exception {
+  final String message;
+  final String? code;
+  const AuthFailure(this.message, {this.code});
+
+  @override
+  String toString() => message;
+}
+
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final UserService _userService = UserService();
 
-  /// --- 1. SESSION MANAGEMENT ---
+  /// --- 1. SESSION ---
 
-  /// Reactive stream to listen to login/logout events.
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
-  /// Returns the current Firebase User (if any)
   User? get currentUser => _auth.currentUser;
 
-  /// Fetches the Firestore profile for the currently logged-in user.
   Future<UserModel?> getCurrentUserProfile() async {
     final user = _auth.currentUser;
-    if (user != null) {
-      dev.log("Fetching Firestore profile: ${user.uid}", name: "AuthService");
-      return await _userService.getUserData(user.uid);
-    }
-    return null;
+    if (user == null) return null;
+    return _userService.getUserData(user.uid);
   }
 
-  /// --- 2. REGISTRATION & VERIFICATION FLOW ---
+  /// --- 2. REGISTRATION & VERIFICATION ---
 
-  /// Registers user, creates Firestore doc, and sends verification email.
+  /// Creates the account, then (best effort) the profile document and the
+  /// verification email. Only account creation can fail the sign-up: if the
+  /// profile write fails, the profile is created on the next app start (see
+  /// CurrentUserNotifier), so the user never ends up with a half-made
+  /// account that can't sign up again ("email already in use").
   Future<AuthResult> registerWithEmail({
     required String name,
     required String email,
     required String password,
   }) async {
+    final UserCredential credential;
     try {
-      dev.log("Starting registration: $email", name: "AuthService");
-
-      UserCredential credential = await _auth.createUserWithEmailAndPassword(
-        email: email,
+      credential = await _auth.createUserWithEmailAndPassword(
+        email: email.trim(),
         password: password,
       );
-
-      if (credential.user != null) {
-        // 1. Prepare the UserModel
-        UserModel newUser = UserModel(
-          uid: credential.user!.uid,
-          name: name,
-          // Stored normalised so invite-by-email lookups match.
-          email: email.trim().toLowerCase(),
-          password: password,
-          deviceTokens: [],
-          createdAt: DateTime.now(),
-          isEmailVerified: false,
-          isSynced: true,
-        );
-
-        // 2. Save to Firestore
-        await _userService.saveOrUpdateUser(newUser);
-
-        // 3. Send verification link
-        await credential.user!.sendEmailVerification();
-
-        dev.log(
-          "User registered. Verification email sent.",
-          name: "AuthService",
-        );
-
-        // 🔥 Always return unverified for new registrations
-        return AuthResult.unverified;
-      }
-
-      return AuthResult.error;
     } on FirebaseAuthException catch (e) {
-      dev.log("Reg Error: ${e.code}", name: "AuthService", error: e);
-      throw _handleAuthError(e);
+      dev.log("Register error: ${e.code}", name: "AuthService");
+      throw _toFailure(e);
     }
-  }
 
-  Future<void> sendVerificationEmail() async {
-    final user = _auth.currentUser;
-    if (user != null && !user.emailVerified) {
-      await user.sendEmailVerification();
-    }
-  }
+    final user = credential.user;
+    if (user == null) throw const AuthFailure('Sign up failed. Try again.');
 
-  /// Manually trigger a resend of the verification email
-  Future<void> resendVerificationEmail() async {
     try {
-      await _auth.currentUser?.sendEmailVerification();
-      dev.log("Verification email resent.", name: "AuthService");
+      await user.updateDisplayName(name);
     } catch (e) {
-      throw Exception("Could not resend email. Try again later.");
+      dev.log("Display name not set: $e", name: "AuthService");
+    }
+
+    try {
+      await _userService
+          .saveOrUpdateUser(
+            UserModel(
+              uid: user.uid,
+              name: name,
+              email: email.trim().toLowerCase(),
+              // Passwords are handled by Firebase Auth only; never store them.
+              password: '',
+              deviceTokens: const [],
+              createdAt: DateTime.now(),
+              isEmailVerified: false,
+              isSynced: true,
+            ),
+          )
+          .timeout(const Duration(seconds: 15));
+    } catch (e) {
+      dev.log("Profile will be created later: $e", name: "AuthService");
+    }
+
+    try {
+      await user.sendEmailVerification();
+    } catch (e) {
+      dev.log("Verification email not sent yet: $e", name: "AuthService");
+    }
+
+    return AuthResult.unverified;
+  }
+
+  /// Resends the verification email. Throws [AuthFailure] on failure.
+  Future<void> resendVerificationEmail() async {
+    final user = _auth.currentUser;
+    if (user == null) throw const AuthFailure('You are signed out.');
+    if (user.emailVerified) return;
+    try {
+      await user.sendEmailVerification();
+    } on FirebaseAuthException catch (e) {
+      throw _toFailure(e);
     }
   }
 
-  /// Forces a reload of the user to check if they have clicked the link
+  /// Reloads the user from Firebase. Returns true once the email is verified.
+  /// Never throws (offline just returns false).
   Future<bool> checkEmailVerified() async {
-    User? user = _auth.currentUser;
-    if (user != null) {
-      await user
-          .reload(); // 🔥 Critical: Refresh local cache from Firebase server
-      bool verified = _auth.currentUser!.emailVerified;
+    final user = _auth.currentUser;
+    if (user == null) return false;
+    try {
+      await user.reload();
+      final refreshed = _auth.currentUser;
+      if (refreshed == null || !refreshed.emailVerified) return false;
 
-      if (verified) {
-        dev.log("Email verified detected.", name: "AuthService");
-        // Update the Firestore flag so the DB matches the Auth state
-        UserModel? profile = await getCurrentUserProfile();
+      // Refresh the ID token so the backend sees email_verified = true.
+      await refreshed.getIdToken(true);
+
+      try {
+        final profile = await getCurrentUserProfile();
         if (profile != null && !profile.isEmailVerified) {
           await _userService.saveOrUpdateUser(
             profile.copyWith(isEmailVerified: true),
           );
         }
+      } catch (e) {
+        dev.log("Profile verified flag not updated: $e", name: "AuthService");
       }
-      return verified;
+      return true;
+    } catch (e) {
+      dev.log("Verification check failed: $e", name: "AuthService");
+      return false;
     }
-    return false;
   }
 
-  /// --- 3. LOGIN & AUTH OPS ---
+  /// --- 3. SIGN IN / PASSWORD ---
 
   Future<AuthResult> signInWithEmail(String email, String password) async {
     try {
-      UserCredential credential = await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-
-      // 🔥 Check verification status immediately
-      if (credential.user != null && !credential.user!.emailVerified) {
-        return AuthResult.unverified;
-      }
-
+      final credential = await _signIn(email.trim(), password);
+      final user = credential.user;
+      if (user != null && !user.emailVerified) return AuthResult.unverified;
       return AuthResult.success;
     } on FirebaseAuthException catch (e) {
-      throw _handleAuthError(e); // Keep your existing error handler
+      throw _toFailure(e);
     }
   }
 
+  Future<UserCredential> _signIn(String email, String password) async {
+    try {
+      return await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+    } on FirebaseAuthException catch (e) {
+      // Older versions trimmed passwords at sign-up; keep those accounts
+      // working if the typed password has surrounding spaces.
+      final trimmed = password.trim();
+      final badCredential =
+          e.code == 'invalid-credential' || e.code == 'wrong-password';
+      if (badCredential && trimmed != password && trimmed.isNotEmpty) {
+        return _auth.signInWithEmailAndPassword(
+          email: email,
+          password: trimmed,
+        );
+      }
+      rethrow;
+    }
+  }
+
+  /// Throws [AuthFailure] on failure.
   Future<void> resetPassword(String email) async {
     try {
-      await _auth.sendPasswordResetEmail(email: email);
-      dev.log("Password reset sent to: $email", name: "AuthService");
+      await _auth.sendPasswordResetEmail(email: email.trim());
     } on FirebaseAuthException catch (e) {
-      throw _handleAuthError(e);
+      throw _toFailure(e);
     }
   }
 
   Future<void> logout() async {
-    dev.log("Signing out.", name: "AuthService");
     await _auth.signOut();
   }
 
-  /// --- 4. ERROR HANDLING ---
+  /// --- 4. ERRORS ---
 
-  String _handleAuthError(FirebaseAuthException e) {
-    switch (e.code) {
-      case 'user-not-found':
-        return 'No account found with this email.';
-      case 'wrong-password':
-        return 'Incorrect password.';
-      case 'email-already-in-use':
-        return 'This email is already registered.';
-      case 'weak-password':
-        return 'The password is too weak.';
-      case 'invalid-email':
-        return 'The email address is not valid.';
-      case 'user-disabled':
-        return 'This account has been disabled.';
-      default:
-        return e.message ?? 'Authentication failed.';
-    }
+  AuthFailure _toFailure(FirebaseAuthException e) {
+    final message = switch (e.code) {
+      'invalid-credential' ||
+      'wrong-password' ||
+      'user-not-found' ||
+      'INVALID_LOGIN_CREDENTIALS' => 'Incorrect email or password.',
+      'invalid-email' => 'That email address is not valid.',
+      'user-disabled' => 'This account has been disabled.',
+      'email-already-in-use' =>
+        'An account already exists for this email. Try signing in.',
+      'weak-password' => 'Password is too weak. Use at least 6 characters.',
+      'too-many-requests' =>
+        'Too many attempts. Please wait a few minutes and try again.',
+      'network-request-failed' =>
+        'No internet connection. Check your network and try again.',
+      'operation-not-allowed' =>
+        'Email sign-in is not enabled. Contact support.',
+      'missing-email' || 'channel-error' => 'Please fill in all fields.',
+      _ => 'Something went wrong. Please try again.',
+    };
+    return AuthFailure(message, code: e.code);
   }
 }

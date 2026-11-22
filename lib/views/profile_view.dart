@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:sprint_14/components/app_toast.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -26,11 +27,8 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
   bool _uploadingPhoto = false;
   bool _syncing = false;
 
-  void _snack(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
-  }
+  void _snack(String message, [ToastType type = ToastType.info]) =>
+      AppToast.show(message, type: type);
 
   // ---------------------------------------------------------------- photo
 
@@ -76,7 +74,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
 
     if (choice == 'remove') {
       await ref.read(currentUserProvider.notifier).removeProfilePicture();
-      _snack('Photo removed');
+      _snack('Photo removed', ToastType.success);
       return;
     }
 
@@ -93,6 +91,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
         e.code.contains('denied')
             ? 'Permission denied. Allow access in your phone settings.'
             : "Couldn't open the ${choice == 'camera' ? 'camera' : 'gallery'}.",
+        ToastType.error,
       );
       return;
     }
@@ -108,6 +107,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
       uploaded
           ? 'Profile photo updated'
           : 'Photo saved. It will upload when you are back online.',
+      uploaded ? ToastType.success : ToastType.info,
     );
   }
 
@@ -126,7 +126,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
     );
     if (newName == null || newName == user.name || !mounted) return;
     await ref.read(currentUserProvider.notifier).updateName(newName);
-    _snack('Name updated');
+    _snack('Name updated', ToastType.success);
   }
 
   // ---------------------------------------------------------------- account
@@ -158,18 +158,18 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
       // Called on the service directly: going through the auth controller
       // put the whole app into a "loading" state for a moment.
       await AuthService().resetPassword(user.email);
-      _snack('Reset link sent to ${user.email}');
+      _snack('Reset link sent to ${user.email}', ToastType.success);
     } catch (e) {
-      _snack(e is String ? e : "Couldn't send the link. Try again later.");
+      _snack(e.toString(), ToastType.error);
     }
   }
 
   Future<void> _resendVerification() async {
     try {
       await AuthService().resendVerificationEmail();
-      _snack('Verification email sent');
+      _snack('Verification email sent', ToastType.success);
     } catch (_) {
-      _snack("Couldn't send the email. Try again later.");
+      _snack("Couldn't send the email. Try again later.", ToastType.error);
     }
   }
 
@@ -184,6 +184,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
       synced
           ? 'Profile synced'
           : "Couldn't sync yet. Check your connection and try again.",
+      synced ? ToastType.success : ToastType.error,
     );
   }
 
@@ -240,7 +241,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                         icon: const Icon(Icons.copy_rounded, size: 18),
                         onPressed: () {
                           Clipboard.setData(ClipboardData(text: user.email));
-                          _snack('Email copied');
+                          _snack('Email copied', ToastType.success);
                         },
                       ),
                     ),

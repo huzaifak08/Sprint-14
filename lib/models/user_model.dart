@@ -64,7 +64,8 @@ class UserModel {
       'uid': uid,
       'name': name,
       'email': email,
-      'password': password,
+      // Never store passwords; this also blanks values saved by old builds.
+      'password': '',
       'profilePic': profilePic,
       'deviceTokens': deviceTokens,
       'isEmailVerified': isEmailVerified, // Save status to cloud
@@ -77,7 +78,7 @@ class UserModel {
       uid: map['uid'] ?? '',
       name: map['name'] ?? '',
       email: map['email'] ?? '',
-      password: map['password'] ?? '',
+      password: '',
       profilePic: map['profilePic'] as String?,
       // 🔥 The Fix: Safely convert dynamic list to String list
       deviceTokens: map['deviceTokens'] != null
@@ -98,7 +99,7 @@ class UserModel {
       'uid': uid,
       'name': name,
       'email': email,
-      'password': password,
+      'password': '',
       'profilePic': profilePic,
       'deviceTokens': json.encode(deviceTokens),
       'isEmailVerified': isEmailVerified ? 1 : 0, // SQLite friendly
@@ -113,7 +114,7 @@ class UserModel {
       uid: json['uid'] ?? '',
       name: json['name'] ?? '',
       email: json['email'] ?? '',
-      password: json['password'] ?? '',
+      password: '',
       profilePic: json['profilePic'] as String?,
       deviceTokens: json['deviceTokens'] != null
           ? List<String>.from(jsonDecode(json['deviceTokens']))

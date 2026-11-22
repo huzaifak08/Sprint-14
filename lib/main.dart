@@ -8,8 +8,10 @@ import 'package:sprint_14/cache/init_cache.dart';
 import 'package:sprint_14/helpers/app_data.dart';
 import 'package:sprint_14/helpers/theme.dart';
 import 'package:sprint_14/providers/app_provider_container.dart';
+import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
 import 'package:sprint_14/providers/settings_provider/settings_provider.dart';
 import 'package:sprint_14/services/routes_service.dart';
+import 'package:sprint_14/views/auth/sign_in_view.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
@@ -47,6 +49,20 @@ class MyApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Session ended outside the app (account disabled/deleted, token
+    // revoked): go back to sign-in. Normal logouts pass through a loading
+    // state and navigate themselves, so they don't trigger this.
+    ref.listen(authControllerProvider, (previous, next) {
+      final wasSignedIn = previous?.value != null;
+      final nowSignedOut = !next.isLoading && next.value == null;
+      if (wasSignedIn && nowSignedOut) {
+        AppData.shared.navigatorKey.currentState?.pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const SignInView()),
+          (route) => false,
+        );
+      }
+    });
+
     final settings = ref.watch(appSettingsProvider);
     return settings.when(
       data: (config) {

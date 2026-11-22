@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sprint_14/components/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:sprint_14/helpers/theme_widgets.dart';
@@ -96,17 +97,9 @@ class _EventLedgersDashboardViewState
   Future<void> _sync({bool showResult = true}) async {
     if (_syncing) return;
     setState(() => _syncing = true);
-    final messenger = ScaffoldMessenger.of(context);
     try {
       await ref.read(eventLedgerProvider.notifier).forceRefresh();
-      if (showResult) {
-        messenger.showSnackBar(
-          const SnackBar(
-            content: Text('Synced'),
-            duration: Duration(seconds: 1),
-          ),
-        );
-      }
+      if (showResult) AppToast.success('Synced');
     } finally {
       if (mounted) setState(() => _syncing = false);
     }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sprint_14/components/app_toast.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -196,9 +197,7 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
     if (_saveAndAddAnother && !_isEditMode) {
       _resetForm();
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Sale Recorded")));
+      AppToast.success('Sale recorded');
 
       return;
     }

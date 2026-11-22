@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:sprint_14/cache/sync/sync_utils.dart';
 import 'package:sprint_14/cache/tables/user_table.dart';
@@ -49,6 +50,7 @@ class CurrentUserNotifier extends _$CurrentUserNotifier {
   Future<UserModel?> _syncWithCloud(String uid) async {
     try {
       var cloudUser = await _userService.getUserData(uid);
+      cloudUser ??= await _createMissingProfile(uid);
       if (cloudUser != null) {
         final token = await NotificationCloudService().getDeviceToken();
 
@@ -74,6 +76,39 @@ class CurrentUserNotifier extends _$CurrentUserNotifier {
       dev.log("Sync Error: $e", name: "CurrentUserProvider");
     }
     return null;
+  }
+
+  /// The account exists but its profile document doesn't (e.g. the write
+  /// failed during sign-up). Recreate it from the Firebase Auth user.
+  Future<UserModel?> _createMissingProfile(String uid) async {
+    final fbUser = FirebaseAuth.instance.currentUser;
+    if (fbUser == null || fbUser.uid != uid) return null;
+    // Offline, a missing cached doc doesn't mean it's missing on the server.
+    if (!await isOnline()) return null;
+
+    final email = fbUser.email ?? '';
+    final profile = UserModel(
+      uid: uid,
+      name: (fbUser.displayName?.trim().isNotEmpty ?? false)
+          ? fbUser.displayName!.trim()
+          : email.split('@').first,
+      email: email.toLowerCase(),
+      password: '',
+      deviceTokens: const [],
+      createdAt: fbUser.metadata.creationTime ?? DateTime.now(),
+      isEmailVerified: fbUser.emailVerified,
+      isSynced: true,
+    );
+    try {
+      await _userService
+          .saveOrUpdateUser(profile)
+          .timeout(const Duration(seconds: 15));
+      dev.log("Recreated missing profile.", name: "CurrentUserProvider");
+      return profile;
+    } catch (e) {
+      dev.log("Couldn't recreate profile: $e", name: "CurrentUserProvider");
+      return null;
+    }
   }
 
   /// --- PROFILE ACTIONS ---

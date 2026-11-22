@@ -1,4 +1,5 @@
 import 'package:app_settings/app_settings.dart';
+import 'package:sprint_14/components/app_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sprint_14/cache/init_cache.dart';
@@ -31,11 +32,8 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
   bool _syncing = false;
   bool _togglingLock = false;
 
-  void _snack(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
-  }
+  void _snack(String message, [ToastType type = ToastType.info]) =>
+      AppToast.show(message, type: type);
 
   Future<void> _syncNow() async {
     if (_syncing) return;
@@ -50,6 +48,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
         pending
             ? "Some changes couldn't be uploaded. Check your connection."
             : 'Everything is synced',
+        pending ? ToastType.error : ToastType.success,
       );
     } finally {
       if (mounted) setState(() => _syncing = false);
@@ -63,10 +62,14 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
     setState(() => _togglingLock = false);
     switch (result) {
       case BiometricToggleResult.done:
-        _snack(value ? 'App lock turned on' : 'App lock turned off');
+        _snack(
+          value ? 'App lock turned on' : 'App lock turned off',
+          ToastType.success,
+        );
       case BiometricToggleResult.unsupported:
         _snack(
           'Set up a fingerprint, face unlock or screen lock on this device first.',
+          ToastType.error,
         );
       case BiometricToggleResult.cancelled:
         _snack('Verification cancelled. Nothing changed.');

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sprint_14/components/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sprint_14/components/app_network_image.dart';
 import 'package:sprint_14/helpers/app_data.dart';
@@ -621,13 +622,7 @@ class _ParticipantsManagementViewState
     String message, {
     bool isError = false,
   }) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: isError ? Colors.red : Colors.green,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    isError ? AppToast.error(message) : AppToast.success(message);
   }
 }
 

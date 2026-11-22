@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_svg/svg.dart';
 import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
-import 'package:sprint_14/services/auth_service.dart';
+import 'package:sprint_14/helpers/recent_emails.dart';
 import 'package:sprint_14/views/auth/verify_email_view.dart';
+import 'package:sprint_14/views/auth/widgets/auth_widgets.dart';
 
 class SignUpView extends ConsumerStatefulWidget {
   const SignUpView({super.key});
@@ -19,12 +20,12 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
   final _passController = TextEditingController();
   final _confirmPassController = TextEditingController();
 
-  final _nameFocus = FocusNode();
   final _emailFocus = FocusNode();
   final _passFocus = FocusNode();
   final _confirmPassFocus = FocusNode();
 
   bool _obscurePass = true;
+  bool _loading = false;
 
   @override
   void dispose() {
@@ -32,290 +33,180 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
     _emailController.dispose();
     _passController.dispose();
     _confirmPassController.dispose();
-    _nameFocus.dispose();
     _emailFocus.dispose();
     _passFocus.dispose();
     _confirmPassFocus.dispose();
     super.dispose();
   }
 
-  /// --- THE LOGIC ---
-  void _handleSignUp() async {
+  Future<void> _handleSignUp() async {
+    if (_loading) return;
     FocusScope.of(context).unfocus();
-    if (_formKey.currentState!.validate()) {
-      // 1. Await the result from the provider
-      final AuthResult? result = await ref
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _loading = true);
+    try {
+      await ref
           .read(authControllerProvider.notifier)
           .signUp(
             _nameController.text.trim(),
             _emailController.text.trim(),
-            _passController.text.trim(),
+            // Passwords are used exactly as typed (never trimmed).
+            _passController.text,
           );
-
-      // 2. Explicitly navigate based on that result
-      if (result == AuthResult.unverified) {
-        if (mounted) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => const VerifyEmailView()),
-          );
-        }
-      }
+      if (!mounted) return;
+      TextInput.finishAutofillContext(shouldSave: true);
+      RecentEmails.remember(_emailController.text);
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const VerifyEmailView()),
+        (route) => false,
+      );
+    } catch (e) {
+      if (mounted) showAuthError(context, e);
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Watch the auth state to show errors/loading
-    final authState = ref.watch(authControllerProvider);
     final theme = Theme.of(context);
-    final size = MediaQuery.of(context).size;
-
-    // Listen for errors to show a SnackBar
-    ref.listen<AsyncValue>(authControllerProvider, (previous, next) {
-      next.whenOrNull(
-        error: (error, stack) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(error.toString()),
-              backgroundColor: theme.colorScheme.error,
-            ),
-          );
-        },
-      );
-    });
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      body: Container(
-        height: size.height,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              theme.colorScheme.primary.withValues(alpha: 0.05),
-              theme.scaffoldBackgroundColor,
-            ],
-          ),
-        ),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+      ),
+      // SafeArea below already adds the app bar's height, so the form starts
+      // under the back button while the background runs edge to edge.
+      extendBodyBehindAppBar: true,
+      body: AuthBackground(
         child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 10),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
+          // Top-aligned so the layout doesn't jump when the keyboard opens.
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+              child: AutofillGroup(
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      SvgPicture.asset("assets/images/logo.svg", width: 60),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              "Create Account",
-                              style: theme.textTheme.headlineMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: theme.colorScheme.onSurface,
-                                fontSize: 20,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              "Join Sprint14 to manage your daily life",
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontSize: 13,
-                                color: theme.colorScheme.onSurface.withValues(
-                                  alpha: 0.6,
+                      const AuthHeader(
+                        title: 'Create account',
+                        subtitle: 'Join Sprint14 to manage your daily life',
+                      ),
+                      const SizedBox(height: 24),
+                      AuthTextField(
+                        label: 'Full name',
+                        controller: _nameController,
+                        hint: 'Enter your name',
+                        icon: Icons.person_outline_rounded,
+                        readOnly: _loading,
+                        textCapitalization: TextCapitalization.words,
+                        autofillHints: const [AutofillHints.name],
+                        onSubmitted: (_) => _emailFocus.requestFocus(),
+                        validator: (v) => (v?.trim().length ?? 0) < 2
+                            ? 'Enter your name (at least 2 characters)'
+                            : null,
+                      ),
+                      AuthTextField(
+                        label: 'Email address',
+                        controller: _emailController,
+                        focusNode: _emailFocus,
+                        hint: 'example@mail.com',
+                        icon: Icons.email_outlined,
+                        readOnly: _loading,
+                        keyboardType: TextInputType.emailAddress,
+                        autofillHints: const [AutofillHints.email],
+                        onSubmitted: (_) => _passFocus.requestFocus(),
+                        validator: validateEmail,
+                      ),
+                      AuthTextField(
+                        label: 'Password',
+                        controller: _passController,
+                        focusNode: _passFocus,
+                        hint: 'At least 6 characters',
+                        icon: Icons.lock_outline_rounded,
+                        obscure: _obscurePass,
+                        readOnly: _loading,
+                        autofillHints: const [AutofillHints.newPassword],
+                        onSubmitted: (_) => _confirmPassFocus.requestFocus(),
+                        suffix: IconButton(
+                          tooltip: _obscurePass
+                              ? 'Show password'
+                              : 'Hide password',
+                          icon: Icon(
+                            _obscurePass
+                                ? Icons.visibility_rounded
+                                : Icons.visibility_off_rounded,
+                          ),
+                          onPressed: () =>
+                              setState(() => _obscurePass = !_obscurePass),
+                        ),
+                        validator: (v) {
+                          final p = v ?? '';
+                          if (p.length < 6) return 'Use at least 6 characters';
+                          if (p.trim() != p) {
+                            return "Password can't start or end with a space";
+                          }
+                          return null;
+                        },
+                      ),
+                      AuthTextField(
+                        label: 'Confirm password',
+                        controller: _confirmPassController,
+                        focusNode: _confirmPassFocus,
+                        hint: 'Repeat your password',
+                        icon: Icons.lock_reset_rounded,
+                        obscure: _obscurePass,
+                        readOnly: _loading,
+                        textInputAction: TextInputAction.done,
+                        autofillHints: const [AutofillHints.newPassword],
+                        onSubmitted: (_) => _handleSignUp(),
+                        validator: (v) => v != _passController.text
+                            ? 'Passwords do not match'
+                            : null,
+                      ),
+                      const SizedBox(height: 32),
+                      AuthPrimaryButton(
+                        label: 'CREATE ACCOUNT',
+                        loading: _loading,
+                        onPressed: _handleSignUp,
+                      ),
+                      const SizedBox(height: 16),
+                      Center(
+                        child: TextButton(
+                          onPressed: _loading
+                              ? null
+                              : () => Navigator.pop(context),
+                          child: Text.rich(
+                            TextSpan(
+                              style: theme.textTheme.bodyMedium,
+                              children: [
+                                const TextSpan(
+                                  text: 'Already have an account? ',
                                 ),
-                              ),
-                              softWrap: true,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
+                                TextSpan(
+                                  text: 'Sign in',
+                                  style: TextStyle(
+                                    color: theme.colorScheme.primary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
+                          ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 30),
-                  _buildLabel("Full Name"),
-                  _buildTextField(
-                    controller: _nameController,
-                    focusNode: _nameFocus,
-                    nextFocus: _emailFocus,
-                    hint: "Enter your name",
-                    icon: Icons.person_outline_rounded,
-                    validator: (v) => v!.isEmpty ? "Name is required" : null,
-                  ),
-                  _buildLabel("Email Address"),
-                  _buildTextField(
-                    controller: _emailController,
-                    focusNode: _emailFocus,
-                    nextFocus: _passFocus,
-                    hint: "example@mail.com",
-                    icon: Icons.email_outlined,
-                    keyboardType: TextInputType.emailAddress,
-                    validator: (v) =>
-                        !v!.contains("@") ? "Invalid email" : null,
-                  ),
-                  _buildLabel("Password"),
-                  _buildTextField(
-                    controller: _passController,
-                    focusNode: _passFocus,
-                    nextFocus: _confirmPassFocus,
-                    hint: "*****",
-                    icon: Icons.lock_outline_rounded,
-                    obscure: _obscurePass,
-                    suffix: IconButton(
-                      icon: Icon(
-                        _obscurePass ? Icons.visibility : Icons.visibility_off,
-                      ),
-                      onPressed: () =>
-                          setState(() => _obscurePass = !_obscurePass),
-                    ),
-                    validator: (v) =>
-                        v!.length < 6 ? "Minimum 6 characters" : null,
-                  ),
-                  _buildLabel("Confirm Password"),
-                  _buildTextField(
-                    controller: _confirmPassController,
-                    focusNode: _confirmPassFocus,
-                    hint: "*****",
-                    icon: Icons.lock_reset_rounded,
-                    obscure: _obscurePass,
-                    validator: (v) => v != _passController.text
-                        ? "Passwords do not match"
-                        : null,
-                  ),
-                  const SizedBox(height: 40),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton(
-                      // Disable button while loading
-                      onPressed: authState.isLoading ? null : _handleSignUp,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: theme.colorScheme.primary,
-                        foregroundColor: theme.colorScheme.onPrimary,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        elevation: 0,
-                      ),
-                      child: authState.isLoading
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : const Text(
-                              "SIGN UP",
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 1.1,
-                              ),
-                            ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Center(
-                    child: TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: RichText(
-                        text: TextSpan(
-                          style: theme.textTheme.bodyMedium,
-                          children: [
-                            const TextSpan(text: "Already have an account? "),
-                            TextSpan(
-                              text: "Sign In",
-                              style: TextStyle(
-                                color: theme.colorScheme.primary,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  // --- Helper UI methods ---
-  Widget _buildLabel(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 4, bottom: 8, top: 16),
-      child: Text(
-        text,
-        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-      ),
-    );
-  }
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required FocusNode focusNode,
-    FocusNode? nextFocus,
-    required String hint,
-    required IconData icon,
-    bool obscure = false,
-    Widget? suffix,
-    TextInputType? keyboardType,
-    String? Function(String?)? validator,
-  }) {
-    return TextFormField(
-      controller: controller,
-      focusNode: focusNode,
-      obscureText: obscure,
-      keyboardType: keyboardType,
-      textInputAction: nextFocus != null
-          ? TextInputAction.next
-          : TextInputAction.done,
-      onFieldSubmitted: (_) => nextFocus != null
-          ? FocusScope.of(context).requestFocus(nextFocus)
-          : _handleSignUp(),
-      validator: validator,
-      decoration: InputDecoration(
-        hintText: hint,
-        prefixIcon: Icon(icon, size: 22),
-        suffixIcon: suffix,
-        filled: true,
-        fillColor: Theme.of(context).colorScheme.surface,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(
-            color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
-          ),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(
-            color: Theme.of(context).colorScheme.primary,
-            width: 1.5,
-          ),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: Theme.of(context).colorScheme.error),
         ),
       ),
     );

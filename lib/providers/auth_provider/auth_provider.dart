@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'dart:developer' as dev;
@@ -10,88 +11,74 @@ import 'package:sprint_14/services/auth_service.dart';
 
 part 'auth_provider.g.dart';
 
+/// Global session state: the signed-in Firebase user, or null.
+///
+/// It never holds an error: sign-in / sign-up failures are thrown to the
+/// calling screen as [AuthFailure]. (Putting errors in this shared state made
+/// every screen listening to it react, e.g. duplicate snackbars.)
 @Riverpod(keepAlive: true)
 class AuthController extends _$AuthController {
-  // Access the service layer. A field initializer (not `late final` set in
-  // build) so rebuilding the provider can't throw LateInitializationError.
+  // A field initializer (not `late final` set in build) so rebuilding the
+  // provider can't throw LateInitializationError.
   final AuthService _authService = AuthService();
+  StreamSubscription<User?>? _authSub;
+  bool _loggingOut = false;
 
   @override
   FutureOr<User?> build() {
+    // React to sessions ended outside the app (account disabled or deleted,
+    // password changed elsewhere, token revoked). Only sign-OUTS are handled
+    // here: sign-ins are applied by signIn/signUp after the cache owner
+    // check, so dependent providers never read another account's cache.
+    _authSub?.cancel();
+    _authSub = _authService.authStateChanges.listen((user) {
+      if (user == null && !_loggingOut && state.value != null) {
+        dev.log("Session ended outside the app.", name: "AuthController");
+        state = const AsyncData(null);
+      }
+    });
+    ref.onDispose(() => _authSub?.cancel());
+
     // Cache ownership for an existing session is checked in main() before
     // the app starts, so this can stay synchronous.
     return FirebaseAuth.instance.currentUser;
   }
 
-  /// --- Sign In Logic ---
-  Future<AuthResult?> signIn(String email, String password) async {
-    state = const AsyncValue.loading();
-    try {
-      final result = await _authService.signInWithEmail(email, password);
-
-      final signedIn = FirebaseAuth.instance.currentUser;
-      if (signedIn != null) await CacheOwner.ensureOwner(signedIn.uid);
-
-      // Update the global state so other parts of the app know the user is here
-      state = AsyncValue.data(FirebaseAuth.instance.currentUser);
-
-      return result; // 🔥 Return the specific result to the UI
-    } catch (e, st) {
-      state = AsyncValue.error(e, st);
-      return AuthResult.error;
-    }
+  /// Signs in. Returns [AuthResult.success] or [AuthResult.unverified];
+  /// throws [AuthFailure] with a user-friendly message on failure.
+  Future<AuthResult> signIn(String email, String password) async {
+    final result = await _authService.signInWithEmail(email, password);
+    await _applySignedInUser();
+    return result;
   }
 
-  /// --- Registration Logic ---
-  Future<AuthResult?> signUp(String name, String email, String password) async {
-    state = const AsyncValue.loading();
-    try {
-      await _authService.registerWithEmail(
-        name: name,
-        email: email,
-        password: password,
-      );
-
-      // Refresh local state with the new user object
-      final currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser != null) await CacheOwner.ensureOwner(currentUser.uid);
-      state = AsyncValue.data(currentUser);
-
-      // Logic: New users are always unverified initially
-      return AuthResult.unverified;
-    } catch (e, st) {
-      state = AsyncValue.error(e, st);
-      return AuthResult.error;
-    }
+  /// Creates an account (always unverified at first). Throws [AuthFailure].
+  Future<AuthResult> signUp(String name, String email, String password) async {
+    final result = await _authService.registerWithEmail(
+      name: name,
+      email: email,
+      password: password,
+    );
+    await _applySignedInUser();
+    return result;
   }
 
-  /// --- Check Verification Status ---
-  /// Updates the state if the user has verified their email
-  Future<void> refreshUserStatus() async {
+  Future<void> _applySignedInUser() async {
+    final user = FirebaseAuth.instance.currentUser;
+    // Wipe another account's cache BEFORE dependents rebuild for this user.
+    if (user != null) await CacheOwner.ensureOwner(user.uid);
+    state = AsyncData(user);
+  }
+
+  /// Reloads the user; returns true once the email is verified.
+  Future<bool> refreshUserStatus() async {
     final isVerified = await _authService.checkEmailVerified();
-    if (isVerified) {
-      // Trigger a rebuild by getting the updated user object
-      state = AsyncValue.data(FirebaseAuth.instance.currentUser);
-    }
+    if (isVerified) state = AsyncData(FirebaseAuth.instance.currentUser);
+    return isVerified;
   }
 
-  Future<void> passwordReset(String email) async {
-    state = const AsyncValue.loading();
-    await AsyncValue.guard(() => _authService.resetPassword(email));
-    state = AsyncValue.data(FirebaseAuth.instance.currentUser);
-  }
-
-  Future<void> resendVerification() async {
-    // We don't necessarily want to set the whole app to a "loading" state
-    // for a resend, so we just call the service.
-    try {
-      await _authService.sendVerificationEmail();
-    } catch (e, st) {
-      // You could optionally set the state to error here if you want
-      // the global listener to catch it.
-      dev.log("Resend error: $e $st");
-    }
-  }
+  /// Throws [AuthFailure] if the email couldn't be sent.
+  Future<void> resendVerification() => _authService.resendVerificationEmail();
 
   /// --- Sign Out ---
   /// 1. Tries to upload pending changes (max 10 s).
@@ -100,6 +87,15 @@ class AuthController extends _$AuthController {
   ///    the cache is kept so the same account gets its changes back on the
   ///    next sign-in (a different account wipes it, see [CacheOwner]).
   Future<void> logout() async {
+    _loggingOut = true;
+    try {
+      await _logout();
+    } finally {
+      _loggingOut = false;
+    }
+  }
+
+  Future<void> _logout() async {
     // Stay signed in (no loading state yet) while syncing: dependent
     // providers need the current user to upload and to remove the token.
     try {
