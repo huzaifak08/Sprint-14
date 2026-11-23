@@ -49,3 +49,5 @@ upload-keystore.jks
 
 # FVM Version Cache
 .fvm/
+# Graphify knowledge graph (regenerated locally by git hooks)
+graphify-out/
