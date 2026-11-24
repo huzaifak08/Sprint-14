@@ -1,7 +1,7 @@
 import 'dart:developer' as dev;
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:sprint_14/helpers/constants.dart';
-import 'package:sprint_14/models/ledger_model.dart';
+import 'package:digital_munshi/helpers/constants.dart';
+import 'package:digital_munshi/models/ledger_model.dart';
 
 class LedgerService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;

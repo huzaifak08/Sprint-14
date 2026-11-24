@@ -1,11 +1,12 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:sprint_14/cache/init_cache.dart';
-import 'package:sprint_14/cache/sync/sync_merge.dart';
-import 'package:sprint_14/cache/sync/sync_utils.dart';
-import 'package:sprint_14/cache/tables/product_table.dart';
-import 'package:sprint_14/models/product_model.dart';
-import 'package:sprint_14/providers/current_user_provider/current_user_provider.dart';
-import 'package:sprint_14/services/product_service.dart';
+import 'package:digital_munshi/cache/init_cache.dart';
+import 'package:digital_munshi/cache/sync/sync_merge.dart';
+import 'package:digital_munshi/cache/sync/sync_utils.dart';
+import 'package:digital_munshi/cache/tables/product_table.dart';
+import 'package:digital_munshi/helpers/app_data.dart';
+import 'package:digital_munshi/models/product_model.dart';
+import 'package:digital_munshi/providers/current_user_provider/current_user_provider.dart';
+import 'package:digital_munshi/services/product_service.dart';
 import 'dart:developer' as dev;
 
 part 'product_provider.g.dart';
@@ -41,7 +42,13 @@ class ProductNotifier extends _$ProductNotifier {
     _performSilentCloudSync(businessId);
   }
 
-  /// Internal helper to sync cloud data without interrupting the user
+  /// Re-reads products from the cache (e.g. after a sale moved stock).
+  Future<void> reloadFromCache(String businessId) async {
+    state = AsyncData(await ProductTable.getAllProducts(businessId));
+  }
+
+  /// Full refresh: push pending changes, then download every product.
+  /// Only runs on open / manual refresh; edits just push their own change.
   Future<void> _performSilentCloudSync(String businessId) async {
     final user = ref.read(currentUserProvider).value;
     if (user == null) return;
@@ -80,36 +87,62 @@ class ProductNotifier extends _$ProductNotifier {
         result.toRemove,
       );
 
-      state = AsyncValue.data(result.visible);
+      // Local rows with pending edits keep their details, but their stock
+      // mirror must still follow the cloud (other devices' sales).
+      final pendingIds = {
+        for (final p in local)
+          if (!p.isSynced) p.id,
+      };
+      await ProductTable.setCloudStock({
+        for (final c in cloudProducts)
+          if (pendingIds.contains(c.id)) c.id: c.currentStock,
+      });
+
+      state = AsyncValue.data(await ProductTable.getAllProducts(businessId));
     } catch (e) {
       dev.log("Silent Product Sync Failed: $e", name: "ProductProvider");
     }
   }
 
   /// 2. Add Product (Optimistic UI)
-  Future<void> addProduct(ProductModel product) async {
-    final local = product.copyWith(isSynced: false, isDeleted: false);
-
-    final current = state.value ?? [];
-    state = AsyncData([local, ...current]);
+  /// [initialStock] is uploaded as a stock adjustment, added to the cloud
+  /// figure (which starts at 0).
+  Future<void> addProduct(ProductModel product, {double initialStock = 0}) async {
+    final hasStock = product.tracksStock && initialStock != 0;
+    final local = product.copyWith(
+      currentStock: 0,
+      pendingStockDelta: hasStock ? initialStock : 0,
+      stockAdjustmentId: hasStock ? AppData.shared.uuid.v4() : null,
+      clearStockAdjustment: !hasStock,
+      isSynced: false,
+      isDeleted: false,
+      updatedAt: DateTime.now(),
+    );
 
     await ProductTable.saveSingleProduct(local);
-    _performSilentCloudSync(product.businessId);
+    state = AsyncData([local, ...?state.value]);
+
+    syncPending(product.businessId);
   }
 
   /// 3. Update Product (Optimistic UI)
-  Future<void> updateProduct(ProductModel product) async {
-    final local = product.copyWith(isSynced: false);
+  /// Saves the product's details. A stock change (restock or correction)
+  /// is passed as [stockDelta] units and added to the cloud figure, so it
+  /// can't overwrite stock moved by sales on other devices.
+  Future<void> updateProduct(ProductModel product, {double stockDelta = 0}) async {
+    final local = product.copyWith(isSynced: false, updatedAt: DateTime.now());
 
-    final current = state.value ?? [];
-    state = AsyncData([
-      for (final p in current)
-        if (p.id == local.id) local else p,
-    ]);
+    await ProductTable.saveProductKeepingStock(local);
+    if (stockDelta.abs() > 1e-9) {
+      await ProductTable.addStockAdjustment(
+        productId: local.id,
+        delta: stockDelta,
+        adjustmentId: AppData.shared.uuid.v4(),
+      );
+    }
+    state = AsyncData(await ProductTable.getAllProducts(local.businessId));
 
-    await ProductTable.saveSingleProduct(local);
-
-    _performSilentCloudSync(local.businessId);
+    syncPending(local.businessId);
   }
 
   /// 4. Delete Product (Optimistic Soft Delete)
@@ -117,14 +150,16 @@ class ProductNotifier extends _$ProductNotifier {
     final current = state.value ?? [];
     final index = current.indexWhere((p) => p.id == productId);
     if (index == -1) return;
-    final product = current[index];
-    final deletedMarker = product.copyWith(isDeleted: true, isSynced: false);
+    final deletedMarker = current[index].copyWith(
+      isDeleted: true,
+      isSynced: false,
+      updatedAt: DateTime.now(),
+    );
 
-    // Remove from UI immediately
+    await ProductTable.saveProductKeepingStock(deletedMarker);
     state = AsyncData(current.where((p) => p.id != productId).toList());
 
-    await ProductTable.saveSingleProduct(deletedMarker);
-    _performSilentCloudSync(businessId);
+    syncPending(businessId);
   }
 
   /// 5. Push Local Changes to Cloud
@@ -137,37 +172,74 @@ class ProductNotifier extends _$ProductNotifier {
     if (user == null || !await isOnline()) return;
 
     final service = ProductService(uid: user.uid);
-    // You should implement getUnsyncedProducts in your ProductTable
     final unsynced = await ProductTable.getUnsyncedProductsByBusiness(
       businessId,
     );
+    if (unsynced.isEmpty) return;
 
     for (final p in unsynced) {
       try {
-        bool success = false;
         if (p.isDeleted) {
-          success = await service.deleteProduct(
+          final success = await service.deleteProduct(
             businessId: p.businessId,
             productId: p.id,
           );
           if (success) await ProductTable.hardDelete(p.id);
-        } else {
-          success = await service.saveProduct(product: p);
-          if (success &&
-              await LocalCacheManager.markSyncedIfUnchanged(
-                ProductTable.tableName,
-                p.toJsonDb(),
-              )) {
-            final current = state.value ?? [];
-            state = AsyncData([
-              for (final item in current)
-                if (item.id == p.id) item.copyWith(isSynced: true) else item,
-            ]);
-          }
+          continue;
+        }
+
+        final result = await service.syncProduct(p);
+        await ProductTable.setCloudStock({p.id: result.cloudStock});
+        if (result.adjustmentSettled) {
+          await ProductTable.settleStockAdjustment(
+            productId: p.id,
+            adjustmentId: p.stockAdjustmentId!,
+            uploadedDelta: p.pendingStockDelta,
+          );
+        }
+
+        // Re-read: the user may have edited the product during the upload,
+        // in which case it stays pending and the newer edit goes next pass.
+        final row = await ProductTable.getById(p.id);
+        if (row == null || row.isDeleted || !_sameDetails(row, p)) continue;
+        final noPendingStock = row.pendingStockDelta.abs() < 1e-9;
+
+        if (!result.fieldsApplied) {
+          // Another device edited the details more recently: keep theirs.
+          final cloud = result.newerCloudProduct!;
+          await ProductTable.saveProductKeepingStock(
+            row.copyWith(
+              title: cloud.title,
+              isTheya: cloud.isTheya,
+              classification: cloud.classification,
+              retailPrice: cloud.retailPrice,
+              msrpPrice: cloud.msrpPrice,
+              unitType: cloud.unitType,
+              updatedAt: cloud.updatedAt,
+              isSynced: noPendingStock,
+              lastSyncAttempt: DateTime.now(),
+            ),
+          );
+        } else if (noPendingStock) {
+          await ProductTable.saveProductKeepingStock(
+            row.copyWith(isSynced: true, lastSyncAttempt: DateTime.now()),
+          );
         }
       } catch (e) {
         dev.log("Product Sync Failed: $e", name: "ProductProvider");
       }
     }
+
+    state = AsyncData(await ProductTable.getAllProducts(businessId));
+  }
+
+  static bool _sameDetails(ProductModel a, ProductModel b) {
+    return a.title == b.title &&
+        a.isTheya == b.isTheya &&
+        a.classification == b.classification &&
+        a.retailPrice == b.retailPrice &&
+        a.msrpPrice == b.msrpPrice &&
+        a.unitType == b.unitType &&
+        a.updatedAt == b.updatedAt;
   }
 }

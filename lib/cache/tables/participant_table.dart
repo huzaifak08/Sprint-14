@@ -1,6 +1,6 @@
 import 'package:sqflite/sqflite.dart';
-import 'package:sprint_14/cache/init_cache.dart';
-import 'package:sprint_14/models/participant_model.dart';
+import 'package:digital_munshi/cache/init_cache.dart';
+import 'package:digital_munshi/models/participant_model.dart';
 import 'dart:developer' as dev;
 
 class ParticipantTable {
@@ -119,6 +119,11 @@ class ParticipantTable {
   static Future<void> hardDeleteParticipant(String id) async {
     final db = await LocalCacheManager.getDatabase();
     await db.delete(tableName, where: 'id = ?', whereArgs: [id]);
+  }
+
+  static Future<void> deleteByBusiness(String businessId) async {
+    final db = await LocalCacheManager.getDatabase();
+    await db.delete(tableName, where: 'businessId = ?', whereArgs: [businessId]);
   }
 
   /// --- CLEAR TABLE ---

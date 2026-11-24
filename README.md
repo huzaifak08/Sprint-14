@@ -1,16 +1,17 @@
-# sprint_14
+# Digital Munshi
 
-A new Flutter project.
+Offline-first bookkeeping app built with Flutter and Firebase:
 
-## Getting Started
+- **Personal ledger** – income/expenses, smart search, filters and insights
+- **Event ledgers** – shared pools, custom splits, balances and settle-up suggestions
+- **Business** – products, sales, expenses and staff roles
 
-This project is a starting point for a Flutter application.
+Package id: `com.digitalmunshi.app`. Release steps are in [RELEASE.md](RELEASE.md).
 
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Development
+```
+flutter pub get
+dart run build_runner build --delete-conflicting-outputs   # Riverpod codegen
+flutter run
+flutter test test
+```

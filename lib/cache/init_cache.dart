@@ -1,17 +1,17 @@
 import 'dart:developer' as dev;
-import 'package:sprint_14/cache/tables/business_table.dart';
-import 'package:sprint_14/cache/tables/event_ledger_table.dart';
-import 'package:sprint_14/cache/tables/event_participant_table.dart';
-import 'package:sprint_14/cache/tables/event_transaction_table.dart';
-import 'package:sprint_14/cache/tables/expense_table.dart';
-import 'package:sprint_14/cache/tables/ledger_table.dart';
-import 'package:sprint_14/cache/tables/notification_table.dart';
-import 'package:sprint_14/cache/tables/participant_table.dart';
-import 'package:sprint_14/cache/tables/product_table.dart';
-import 'package:sprint_14/cache/tables/sale_table.dart';
-import 'package:sprint_14/cache/tables/settings_table.dart';
-import 'package:sprint_14/cache/tables/settlement_milestone_table.dart';
-import 'package:sprint_14/cache/tables/user_table.dart';
+import 'package:digital_munshi/cache/tables/business_table.dart';
+import 'package:digital_munshi/cache/tables/event_ledger_table.dart';
+import 'package:digital_munshi/cache/tables/event_participant_table.dart';
+import 'package:digital_munshi/cache/tables/event_transaction_table.dart';
+import 'package:digital_munshi/cache/tables/expense_table.dart';
+import 'package:digital_munshi/cache/tables/ledger_table.dart';
+import 'package:digital_munshi/cache/tables/notification_table.dart';
+import 'package:digital_munshi/cache/tables/participant_table.dart';
+import 'package:digital_munshi/cache/tables/product_table.dart';
+import 'package:digital_munshi/cache/tables/sale_table.dart';
+import 'package:digital_munshi/cache/tables/settings_table.dart';
+import 'package:digital_munshi/cache/tables/settlement_milestone_table.dart';
+import 'package:digital_munshi/cache/tables/user_table.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 
@@ -29,12 +29,12 @@ class LocalCacheManager {
 
   static Future<Database> initDatabase() async {
     final documentsDirectory = await getDatabasesPath();
-    final path = join(documentsDirectory, 'sprint_14.db');
+    final path = join(documentsDirectory, 'digital_munshi.db');
     dev.log("Cache Path: $path");
 
     return openDatabase(
       path,
-      version: 18, // Increment version number when schema changes
+      version: 19, // Increment version number when schema changes
       onCreate: (db, version) async {
         // await ProjectTable.createTable(db);
         await LedgerTable.createTable(db);
@@ -115,8 +115,28 @@ class LocalCacheManager {
             "v18- Added isFundDeposit and paidFromPool columns to event_transactions",
           );
         }
+
+        if (oldVersion < 19) {
+          await SaleTable.migrateV19(db);
+          await ProductTable.migrateV19(db);
+          await ExpenseTable.migrateV19(db);
+          dev.log("v19- Sale items, stock tracking and business indexes");
+        }
       },
     );
+  }
+
+  /// Adds [column] to [table] unless it already exists (tables rebuilt by an
+  /// older migration step may already have it).
+  static Future<void> addColumnIfMissing(
+    Database db,
+    String table,
+    String column,
+    String definition,
+  ) async {
+    final info = await db.rawQuery('PRAGMA table_info($table)');
+    if (info.any((c) => c['name'] == column)) return;
+    await db.execute('ALTER TABLE $table ADD COLUMN $column $definition');
   }
 
   /// Returns every row of [table] matching [where], including unsynced and
@@ -136,10 +156,17 @@ class LocalCacheManager {
   /// left unsynced so the newer version is uploaded on the next pass.
   /// (Previously the sync wrote the uploaded copy back, silently replacing
   /// the edit with the old values both locally and, later, in the cloud.)
+  ///
+  /// Columns in [ignore] are not compared (use it for columns the sync itself
+  /// rewrites, like a stock mirror). [alsoSet] is written in the same update
+  /// when the row is marked synced (e.g. a local logo path replaced by its
+  /// uploaded URL).
   static Future<bool> markSyncedIfUnchanged(
     String table,
     Map<String, Object?> uploadedRow, {
     String idColumn = 'id',
+    Set<String> ignore = const {},
+    Map<String, Object?> alsoSet = const {},
   }) async {
     final db = await getDatabase();
     final id = uploadedRow[idColumn];
@@ -153,11 +180,16 @@ class LocalCacheManager {
     final current = rows.first;
     for (final entry in uploadedRow.entries) {
       if (entry.key == 'isSynced' || entry.key == 'lastSyncAttempt') continue;
+      if (ignore.contains(entry.key)) continue;
       if ('${current[entry.key]}' != '${entry.value}') return false;
     }
     await db.update(
       table,
-      {'isSynced': 1, 'lastSyncAttempt': DateTime.now().toIso8601String()},
+      {
+        ...alsoSet,
+        'isSynced': 1,
+        'lastSyncAttempt': DateTime.now().toIso8601String(),
+      },
       where: '$idColumn = ?',
       whereArgs: [id],
     );

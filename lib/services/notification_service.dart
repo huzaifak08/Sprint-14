@@ -1,8 +1,8 @@
 import 'dart:developer' as dev;
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:sprint_14/helpers/app_data.dart';
-import 'package:sprint_14/helpers/constants.dart'; // Contains centralized firestore / collection tags
-import 'package:sprint_14/models/notification_model.dart';
+import 'package:digital_munshi/helpers/app_data.dart';
+import 'package:digital_munshi/helpers/constants.dart'; // Contains centralized firestore / collection tags
+import 'package:digital_munshi/models/notification_model.dart';
 
 class NotificationService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;

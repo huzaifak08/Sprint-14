@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:sprint_14/views/business_views/business_dashboard_view/business_dashboard_view_model.dart';
+import 'package:digital_munshi/views/business_views/business_dashboard_view/business_dashboard_view_model.dart';
 
 class HeaderSection extends StatelessWidget {
   final DashboardUiState uiState;

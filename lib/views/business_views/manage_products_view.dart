@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:sprint_14/components/category_selector.dart';
-import 'package:sprint_14/components/sync_status_badge.dart';
-import 'package:sprint_14/models/product_model.dart';
-import 'package:sprint_14/providers/product_provider/product_provider.dart';
-import 'package:sprint_14/views/business_views/add_update_product_view.dart';
+import 'package:digital_munshi/components/category_selector.dart';
+import 'package:digital_munshi/components/sync_status_badge.dart';
+import 'package:digital_munshi/models/product_model.dart';
+import 'package:digital_munshi/providers/business_provider/business_provider.dart';
+import 'package:digital_munshi/providers/product_provider/product_provider.dart';
+import 'package:digital_munshi/providers/stock_provider/stock_provider.dart';
+import 'package:digital_munshi/views/business_views/add_update_product_view.dart';
 
 class ManageProductsView extends ConsumerStatefulWidget {
   final String businessId;
@@ -32,6 +34,12 @@ class _ManageProductsViewState extends ConsumerState<ManageProductsView> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final productState = ref.watch(productProvider(widget.businessId));
+    final stockLevels =
+        ref.watch(stockLevelsProvider(widget.businessId)).value ??
+        const <String, double>{};
+    final currency =
+        ref.watch(singleBusinessProvider(widget.businessId)).value?.currency ??
+        'PKR';
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
@@ -79,10 +87,15 @@ class _ManageProductsViewState extends ConsumerState<ManageProductsView> {
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
                 sliver: SliverList(
                   delegate: SliverChildBuilderDelegate(
-                    (context, index) => _ProductCatalogCard(
-                      product: filteredProducts[index],
-                      businessId: widget.businessId,
-                    ),
+                    (context, index) {
+                      final product = filteredProducts[index];
+                      return _ProductCatalogCard(
+                        product: product,
+                        businessId: widget.businessId,
+                        stock: stockLevels[product.id] ?? product.currentStock,
+                        currency: currency,
+                      );
+                    },
                     childCount: filteredProducts.length,
                   ),
                 ),
@@ -159,7 +172,27 @@ class _ManageProductsViewState extends ConsumerState<ManageProductsView> {
 class _ProductCatalogCard extends StatelessWidget {
   final ProductModel product;
   final String businessId;
-  const _ProductCatalogCard({required this.product, required this.businessId});
+
+  /// Stock on hand, including changes not uploaded yet.
+  final double stock;
+  final String currency;
+
+  const _ProductCatalogCard({
+    required this.product,
+    required this.businessId,
+    required this.stock,
+    required this.currency,
+  });
+
+  String get _stockLabel {
+    if (!product.tracksStock) return "Unlimited";
+    final amount = stock % 1 == 0
+        ? stock.toStringAsFixed(0)
+        : stock.toStringAsFixed(2);
+    final unit = product.unitType == 'Piece' ? 'pcs' : product.unitType;
+    if (stock <= 0) return "Out of stock ($amount $unit)";
+    return "$amount $unit in stock";
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -231,6 +264,18 @@ class _ProductCatalogCard extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
+                    Text(
+                      _stockLabel,
+                      style: TextStyle(
+                        color:
+                            product.tracksStock &&
+                                stock <= product.lowStockThreshold
+                            ? Colors.red.shade400
+                            : Colors.grey.shade600,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -239,7 +284,7 @@ class _ProductCatalogCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    "Rs. ${product.msrpPrice.toStringAsFixed(0)}",
+                    "$currency ${product.msrpPrice.toStringAsFixed(0)}",
                     style: TextStyle(
                       color: accentColor,
                       fontWeight: FontWeight.w900,

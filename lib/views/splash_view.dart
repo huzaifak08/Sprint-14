@@ -1,14 +1,15 @@
 import 'dart:math' as math;
+import 'package:digital_munshi/helpers/constants.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
-import 'package:sprint_14/providers/settings_provider/settings_provider.dart';
-import 'package:sprint_14/services/post_auth_navigation.dart';
-import 'package:sprint_14/views/auth/sign_in_view.dart';
-import 'package:sprint_14/views/auth/verify_email_view.dart';
-import 'package:sprint_14/views/home_view.dart';
+import 'package:digital_munshi/providers/auth_provider/auth_provider.dart';
+import 'package:digital_munshi/providers/settings_provider/settings_provider.dart';
+import 'package:digital_munshi/services/post_auth_navigation.dart';
+import 'package:digital_munshi/views/auth/sign_in_view.dart';
+import 'package:digital_munshi/views/auth/verify_email_view.dart';
+import 'package:digital_munshi/views/home_view.dart';
 import 'dart:developer' as dev;
 
 class SplashView extends ConsumerStatefulWidget {
@@ -151,7 +152,7 @@ class _SplashViewState extends ConsumerState<SplashView>
                             child: Column(
                               children: [
                                 Text(
-                                  'Sprint14',
+                                  appName,
                                   style: TextStyle(
                                     color: on,
                                     fontSize: 38,

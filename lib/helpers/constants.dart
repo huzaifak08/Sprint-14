@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+// App identity (Play Store / bundle id: com.digitalmunshi.app).
+const String appName = 'Digital Munshi';
+
 // Firestore Collections:
 final String usersCollection = "users";
 final String projectsCollection = "projects";
@@ -20,19 +23,6 @@ const String methodChannel = "flutter_channel";
 
 // Method Channel Methods:
 const String getAppVersionMethod = "getAppVersion";
-
-final allSteps = [
-  'Step 1: Console Setup',
-  'Step 2: Verification',
-  'Step 3: Development',
-  'Step 4: 1st Release',
-  'Step 5: Testing Start',
-  'Step 6: 2nd Release',
-  'Step 7: 3rd Release',
-  'Step 8: Production App',
-  'Step 9: Go Live',
-  'Step 10: Delivery',
-];
 
 final List<String> transactionCategories = [
   "Food",

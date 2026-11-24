@@ -9,6 +9,10 @@ class ExpenseModel {
   final DateTime dateTime;
   final String recordedById; // Tracking who added the expense (for roles)
 
+  /// Last local edit time, used to keep the newest edit when two devices
+  /// change the same expense.
+  final DateTime? updatedAt;
+
   // 🔁 Sync & Cache fields
   final bool isSynced;
   final DateTime? lastSyncAttempt;
@@ -22,20 +26,24 @@ class ExpenseModel {
     required this.amount,
     required this.dateTime,
     required this.recordedById,
+    this.updatedAt,
     required this.isSynced,
     this.lastSyncAttempt,
     required this.isDeleted,
   });
 
   // ===================== copyWith =====================
+  /// Pass [clearNote] to remove the note (a null [note] keeps the old one).
   ExpenseModel copyWith({
     String? id,
     String? businessId,
     String? category,
     String? note,
+    bool clearNote = false,
     double? amount,
     DateTime? dateTime,
     String? recordedById,
+    DateTime? updatedAt,
     bool? isSynced,
     DateTime? lastSyncAttempt,
     bool? isDeleted,
@@ -44,10 +52,11 @@ class ExpenseModel {
       id: id ?? this.id,
       businessId: businessId ?? this.businessId,
       category: category ?? this.category,
-      note: note ?? this.note,
+      note: clearNote ? null : (note ?? this.note),
       amount: amount ?? this.amount,
       dateTime: dateTime ?? this.dateTime,
       recordedById: recordedById ?? this.recordedById,
+      updatedAt: updatedAt ?? this.updatedAt,
       isSynced: isSynced ?? this.isSynced,
       lastSyncAttempt: lastSyncAttempt ?? this.lastSyncAttempt,
       isDeleted: isDeleted ?? this.isDeleted,
@@ -64,6 +73,7 @@ class ExpenseModel {
       'amount': amount,
       'dateTime': Timestamp.fromDate(dateTime),
       'recordedById': recordedById,
+      'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
     };
   }
 
@@ -76,6 +86,9 @@ class ExpenseModel {
       amount: (map['amount'] as num?)?.toDouble() ?? 0.0,
       dateTime: (map['dateTime'] as Timestamp).toDate(),
       recordedById: map['recordedById'] ?? '',
+      updatedAt: map['updatedAt'] is Timestamp
+          ? (map['updatedAt'] as Timestamp).toDate()
+          : null,
       isSynced: true,
       lastSyncAttempt: null,
       isDeleted: false,
@@ -92,6 +105,7 @@ class ExpenseModel {
       'amount': amount,
       'dateTime': dateTime.toIso8601String(),
       'recordedById': recordedById,
+      'updatedAt': updatedAt?.toIso8601String(),
       'isSynced': isSynced ? 1 : 0,
       'lastSyncAttempt': lastSyncAttempt?.toIso8601String(),
       'isDeleted': isDeleted ? 1 : 0,
@@ -107,6 +121,9 @@ class ExpenseModel {
       amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
       dateTime: DateTime.parse(json['dateTime']),
       recordedById: json['recordedById'] ?? '',
+      updatedAt: json['updatedAt'] != null
+          ? DateTime.tryParse(json['updatedAt'].toString())
+          : null,
       isSynced: (json['isSynced'] ?? 0) == 1,
       lastSyncAttempt: json['lastSyncAttempt'] != null
           ? DateTime.parse(json['lastSyncAttempt'])

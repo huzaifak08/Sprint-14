@@ -1,11 +1,13 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:sprint_14/cache/init_cache.dart';
-import 'package:sprint_14/cache/sync/sync_merge.dart';
-import 'package:sprint_14/cache/sync/sync_utils.dart';
-import 'package:sprint_14/cache/tables/sale_table.dart';
-import 'package:sprint_14/models/sale_model.dart';
-import 'package:sprint_14/providers/current_user_provider/current_user_provider.dart';
-import 'package:sprint_14/services/sale_service.dart';
+import 'package:digital_munshi/cache/init_cache.dart';
+import 'package:digital_munshi/cache/sync/sync_merge.dart';
+import 'package:digital_munshi/cache/sync/sync_utils.dart';
+import 'package:digital_munshi/cache/tables/product_table.dart';
+import 'package:digital_munshi/cache/tables/sale_table.dart';
+import 'package:digital_munshi/models/sale_model.dart';
+import 'package:digital_munshi/providers/current_user_provider/current_user_provider.dart';
+import 'package:digital_munshi/providers/product_provider/product_provider.dart';
+import 'package:digital_munshi/services/sale_service.dart';
 import 'dart:developer' as dev;
 
 part 'sale_provider.g.dart';
@@ -44,7 +46,8 @@ class SaleNotifier extends _$SaleNotifier {
     _performSilentCloudSync(businessId);
   }
 
-  /// Internal helper to sync cloud data without interrupting the user
+  /// Full refresh: push pending changes, then download every sale.
+  /// Only runs on open / manual refresh; edits just push their own change.
   Future<void> _performSilentCloudSync(String businessId) async {
     final user = ref.read(currentUserProvider).value;
     if (user == null) return;
@@ -75,7 +78,9 @@ class SaleNotifier extends _$SaleNotifier {
         idOf: (s) => s.id,
         isSynced: (s) => s.isSynced,
         isDeleted: (s) => s.isDeleted,
-        markSynced: (s) => s.copyWith(isSynced: true),
+        // A cloud sale's stock use is already in the cloud stock figures.
+        markSynced: (s) =>
+            s.copyWith(isSynced: true, syncedStock: s.stockEffects),
         sort: (a, b) => b.dateTime.compareTo(a.dateTime),
       );
 
@@ -90,28 +95,35 @@ class SaleNotifier extends _$SaleNotifier {
 
   /// 2. Record Sale (Optimistic)
   Future<void> recordSale(SaleModel sale) async {
-    final local = sale.copyWith(isSynced: false, isDeleted: false);
+    final local = sale.copyWith(
+      isSynced: false,
+      isDeleted: false,
+      updatedAt: DateTime.now(),
+    );
 
-    // Update State Optimistically
-    final currentSales = state.value ?? [];
-    state = AsyncData([local, ...currentSales]);
-
+    // Saved before the state update so stock figures (which read the
+    // cache when sales change) already include this sale.
     await SaleTable.saveSingleSale(local);
-    _performSilentCloudSync(sale.businessId);
+    state = AsyncData([local, ...?state.value]);
+
+    syncPending(sale.businessId);
   }
 
   /// 3. Update Sale (Optimistic)
   Future<void> updateSale(SaleModel updatedSale) async {
-    final local = updatedSale.copyWith(isSynced: false);
+    final local = updatedSale.copyWith(
+      isSynced: false,
+      updatedAt: DateTime.now(),
+      syncedStock: await _storedSyncedStock(updatedSale.id),
+    );
 
-    final currentSales = state.value ?? [];
+    await SaleTable.saveSaleKeepingSyncedStock(local);
     state = AsyncData([
-      for (final s in currentSales)
+      for (final s in state.value ?? <SaleModel>[])
         if (s.id == local.id) local else s,
     ]);
 
-    await SaleTable.saveSingleSale(local);
-    _performSilentCloudSync(local.businessId);
+    syncPending(local.businessId);
   }
 
   /// 4. Delete Sale (Optimistic Soft Delete)
@@ -119,14 +131,30 @@ class SaleNotifier extends _$SaleNotifier {
     final currentSales = state.value ?? [];
     final index = currentSales.indexWhere((s) => s.id == saleId);
     if (index == -1) return;
-    final sale = currentSales[index];
-    final deletedMarker = sale.copyWith(isDeleted: true, isSynced: false);
+    final deletedMarker = currentSales[index].copyWith(
+      isDeleted: true,
+      isSynced: false,
+      updatedAt: DateTime.now(),
+      syncedStock: await _storedSyncedStock(saleId),
+    );
 
-    // Remove from UI immediately
+    await SaleTable.saveSaleKeepingSyncedStock(deletedMarker);
     state = AsyncData(currentSales.where((s) => s.id != saleId).toList());
 
-    await SaleTable.saveSingleSale(deletedMarker);
-    _performSilentCloudSync(businessId);
+    syncPending(businessId);
+  }
+
+  /// The cloud stock use recorded in the cache for [saleId]. The copy held
+  /// by a screen may be older than a sync that finished meanwhile, so it
+  /// must not overwrite this.
+  Future<Map<String, double>> _storedSyncedStock(String saleId) async {
+    final rows = await LocalCacheManager.queryAllRows(
+      SaleTable.tableName,
+      where: 'id = ?',
+      whereArgs: [saleId],
+    );
+    if (rows.isEmpty) return const {};
+    return SaleModel.fromJsonDb(rows.first).syncedStock;
   }
 
   /// 5. Background Sync Engine
@@ -138,34 +166,64 @@ class SaleNotifier extends _$SaleNotifier {
     final user = ref.read(currentUserProvider).value;
     if (user == null || !await isOnline()) return;
 
-    final service = SaleService(uid: user.uid);
     final unsynced = await SaleTable.getUnsyncedSalesByBusiness(businessId);
+    if (unsynced.isEmpty) return;
+
+    // Products first: a product created offline must exist in the cloud
+    // before a sale can take stock from it.
+    await ref
+        .read(productProvider(businessId).notifier)
+        .syncPending(businessId);
+
+    final service = SaleService(uid: user.uid);
+    var stockChanged = false;
 
     for (final s in unsynced) {
       try {
-        if (s.isDeleted) {
-          final success = await service.deleteSaleData(
-            businessId: s.businessId,
-            saleId: s.id,
-          );
-          if (success) await SaleTable.hardDelete(s.id);
-        } else {
-          final success = await service.recordSale(sale: s);
-          if (success &&
-              await LocalCacheManager.markSyncedIfUnchanged(
-                SaleTable.tableName,
-                s.toJsonDb(),
-              )) {
-            final current = state.value ?? [];
-            state = AsyncData([
-              for (final item in current)
-                if (item.id == s.id) item.copyWith(isSynced: true) else item,
-            ]);
+        final result = await service.syncSale(s);
+
+        if (!result.applied) {
+          // Another device edited this sale more recently: keep its version,
+          // unless the user changed the sale again meanwhile.
+          final cloud = result.newerCloudSale!;
+          if (await LocalCacheManager.markSyncedIfUnchanged(
+            SaleTable.tableName,
+            s.toJsonDb(),
+            ignore: const {'syncedStock'},
+          )) {
+            await SaleTable.saveSingleSale(
+              cloud.copyWith(isSynced: true, syncedStock: cloud.stockEffects),
+            );
           }
+          continue;
+        }
+
+        if (result.cloudStock.isNotEmpty) {
+          await ProductTable.setCloudStock(result.cloudStock);
+          stockChanged = true;
+        }
+
+        if (s.isDeleted) {
+          await SaleTable.hardDelete(s.id);
+        } else {
+          // The cloud now has this sale's stock use, whatever happens next.
+          await SaleTable.setSyncedStock(s.id, result.syncedStock);
+          await LocalCacheManager.markSyncedIfUnchanged(
+            SaleTable.tableName,
+            s.toJsonDb(),
+            ignore: const {'syncedStock'},
+          );
         }
       } catch (e) {
         dev.log("Sale Sync Failed: $e", name: "SaleProvider");
       }
+    }
+
+    state = AsyncData(await SaleTable.getBusinessSalesFromCache(businessId));
+    if (stockChanged) {
+      await ref
+          .read(productProvider(businessId).notifier)
+          .reloadFromCache(businessId);
     }
   }
 }

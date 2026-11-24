@@ -1,5 +1,27 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+/// Type given to new businesses (and to old records that have none).
+const String defaultBusinessType = 'Garments';
+
+const List<String> businessTypes = [
+  'Garments',
+  'Cloth House',
+  'Boutique',
+  'Footwear',
+  'General Store',
+  'Other',
+];
+
+const List<String> businessCurrencies = [
+  'PKR',
+  'INR',
+  'AED',
+  'SAR',
+  'USD',
+  'GBP',
+  'EUR',
+];
+
 class BusinessModel {
   final String id;
   final String name;
@@ -74,7 +96,7 @@ class BusinessModel {
     return BusinessModel(
       id: map['id'] ?? '',
       name: map['name'] ?? '',
-      type: map['type'] ?? 'Clothing',
+      type: map['type'] ?? defaultBusinessType,
       currency: map['currency'] ?? 'PKR',
       createdAt: (map['createdAt'] as Timestamp).toDate(),
       ownerId: map['ownerId'] ?? '',
@@ -106,7 +128,7 @@ class BusinessModel {
     return BusinessModel(
       id: json['id'],
       name: json['name'] ?? '',
-      type: json['type'] ?? 'Clothing',
+      type: json['type'] ?? defaultBusinessType,
       currency: json['currency'] ?? 'PKR',
       createdAt: DateTime.parse(json['createdAt']),
       ownerId: json['ownerId'] ?? '',

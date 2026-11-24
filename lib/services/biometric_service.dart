@@ -1,4 +1,5 @@
 import 'package:local_auth/local_auth.dart';
+import 'package:digital_munshi/helpers/constants.dart';
 import 'dart:developer' as dev;
 
 class BiometricService {
@@ -17,7 +18,7 @@ class BiometricService {
   }
 
   Future<bool> authenticate({
-    String reason = 'Unlock Sprint14 to access your ledgers',
+    String reason = 'Unlock $appName to access your ledgers',
   }) async {
     try {
       return await _auth.authenticate(

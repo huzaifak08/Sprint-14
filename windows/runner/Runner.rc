@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.zaifii" "\0"
-            VALUE "FileDescription", "sprint_14" "\0"
+            VALUE "CompanyName", "Digital Munshi" "\0"
+            VALUE "FileDescription", "Digital Munshi" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "sprint_14" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.zaifii. All rights reserved." "\0"
-            VALUE "OriginalFilename", "sprint_14.exe" "\0"
-            VALUE "ProductName", "sprint_14" "\0"
+            VALUE "InternalName", "digital_munshi" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Digital Munshi. All rights reserved." "\0"
+            VALUE "OriginalFilename", "digital_munshi.exe" "\0"
+            VALUE "ProductName", "Digital Munshi" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

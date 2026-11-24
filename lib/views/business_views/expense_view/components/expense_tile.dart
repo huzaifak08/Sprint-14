@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:sprint_14/models/expense_model.dart';
-import 'package:sprint_14/providers/expense_provider/expense_provider.dart';
-import 'package:sprint_14/views/business_views/expense_view/components/expense_form_sheet.dart';
+import 'package:digital_munshi/models/expense_model.dart';
+import 'package:digital_munshi/providers/expense_provider/expense_provider.dart';
+import 'package:digital_munshi/views/business_views/expense_view/components/expense_form_sheet.dart';
 
 class ExpenseTile extends ConsumerWidget {
   final ExpenseModel expense;

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sprint_14/models/ledger_model.dart';
-import 'package:sprint_14/views/ledger_view/ledger_view_model.dart';
+import 'package:digital_munshi/models/ledger_model.dart';
+import 'package:digital_munshi/views/ledger_view/ledger_view_model.dart';
 
 LedgerModel l(
   String id,

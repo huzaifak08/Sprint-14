@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sprint_14/models/event_participant_model.dart';
-import 'package:sprint_14/models/event_transaction_model.dart';
-import 'package:sprint_14/providers/event_ledger_provider/event_ledger_provider.dart';
-import 'package:sprint_14/views/event_ledgers_views/event_balances.dart';
+import 'package:digital_munshi/models/event_participant_model.dart';
+import 'package:digital_munshi/models/event_transaction_model.dart';
+import 'package:digital_munshi/providers/event_ledger_provider/event_ledger_provider.dart';
+import 'package:digital_munshi/views/event_ledgers_views/event_balances.dart';
 
 EventParticipantModel p(String id) => EventParticipantModel(
   id: id,

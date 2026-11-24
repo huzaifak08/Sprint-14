@@ -1,13 +1,13 @@
 import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:sprint_14/cache/sync/sync_utils.dart';
-import 'package:sprint_14/cache/tables/user_table.dart';
-import 'package:sprint_14/models/user_model.dart';
-import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
-import 'package:sprint_14/services/storage_service.dart';
-import 'package:sprint_14/services/user_service.dart';
-import 'package:sprint_14/clients/notifications/notification_cloud_service.dart';
+import 'package:digital_munshi/cache/sync/sync_utils.dart';
+import 'package:digital_munshi/cache/tables/user_table.dart';
+import 'package:digital_munshi/models/user_model.dart';
+import 'package:digital_munshi/providers/auth_provider/auth_provider.dart';
+import 'package:digital_munshi/services/storage_service.dart';
+import 'package:digital_munshi/services/user_service.dart';
+import 'package:digital_munshi/clients/notifications/notification_cloud_service.dart';
 import 'dart:developer' as dev;
 
 part 'current_user_provider.g.dart';

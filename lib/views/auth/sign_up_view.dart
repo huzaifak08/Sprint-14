@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:digital_munshi/helpers/constants.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
-import 'package:sprint_14/helpers/recent_emails.dart';
-import 'package:sprint_14/views/auth/verify_email_view.dart';
-import 'package:sprint_14/views/auth/widgets/auth_widgets.dart';
+import 'package:digital_munshi/providers/auth_provider/auth_provider.dart';
+import 'package:digital_munshi/helpers/recent_emails.dart';
+import 'package:digital_munshi/views/auth/verify_email_view.dart';
+import 'package:digital_munshi/views/auth/widgets/auth_widgets.dart';
 
 class SignUpView extends ConsumerStatefulWidget {
   const SignUpView({super.key});
@@ -96,7 +97,7 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
                     children: [
                       const AuthHeader(
                         title: 'Create account',
-                        subtitle: 'Join Sprint14 to manage your daily life',
+                        subtitle: 'Join $appName to keep your accounts in order',
                       ),
                       const SizedBox(height: 24),
                       AuthTextField(

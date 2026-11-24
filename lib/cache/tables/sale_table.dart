@@ -1,6 +1,8 @@
+import 'dart:convert';
+
 import 'package:sqflite/sqflite.dart';
-import 'package:sprint_14/cache/init_cache.dart';
-import 'package:sprint_14/models/sale_model.dart';
+import 'package:digital_munshi/cache/init_cache.dart';
+import 'package:digital_munshi/models/sale_model.dart';
 import 'dart:developer' as dev;
 
 class SaleTable {
@@ -18,11 +20,90 @@ class SaleTable {
         quantity REAL NOT NULL,
         measurement REAL NOT NULL,
         dateTime TEXT NOT NULL,
+        items TEXT,
+        recordedById TEXT,
+        stockTracked INTEGER NOT NULL DEFAULT 0,
+        updatedAt TEXT,
+        syncedStock TEXT,
         isSynced INTEGER NOT NULL,
         lastSyncAttempt TEXT,
         isDeleted INTEGER NOT NULL
       )
     ''');
+    await createIndexes(db);
+  }
+
+  static Future<void> createIndexes(Database db) async {
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_sales_business_date '
+      'ON $tableName (businessId, dateTime)',
+    );
+  }
+
+  /// v19: per-item lines, stock tracking and audit fields.
+  static Future<void> migrateV19(Database db) async {
+    await LocalCacheManager.addColumnIfMissing(
+      db,
+      tableName,
+      'items',
+      'TEXT',
+    );
+    await LocalCacheManager.addColumnIfMissing(
+      db,
+      tableName,
+      'recordedById',
+      'TEXT',
+    );
+    await LocalCacheManager.addColumnIfMissing(
+      db,
+      tableName,
+      'stockTracked',
+      'INTEGER NOT NULL DEFAULT 0',
+    );
+    await LocalCacheManager.addColumnIfMissing(
+      db,
+      tableName,
+      'updatedAt',
+      'TEXT',
+    );
+    await LocalCacheManager.addColumnIfMissing(
+      db,
+      tableName,
+      'syncedStock',
+      'TEXT',
+    );
+    await createIndexes(db);
+  }
+
+  /// Records the stock use the cloud now reflects for [saleId].
+  static Future<void> setSyncedStock(
+    String saleId,
+    Map<String, double> stock,
+  ) async {
+    final db = await LocalCacheManager.getDatabase();
+    await db.update(
+      tableName,
+      {'syncedStock': jsonEncode(stock)},
+      where: 'id = ?',
+      whereArgs: [saleId],
+    );
+  }
+
+  /// Every unsynced row for [businessId], including soft-deleted ones.
+  /// Used to work out stock changes that haven't reached the cloud.
+  static Future<List<SaleModel>> getPendingRows(String businessId) async {
+    final db = await LocalCacheManager.getDatabase();
+    final maps = await db.query(
+      tableName,
+      where: 'businessId = ? AND isSynced = 0',
+      whereArgs: [businessId],
+    );
+    return maps.map(SaleModel.fromJsonDb).toList();
+  }
+
+  static Future<void> deleteByBusiness(String businessId) async {
+    final db = await LocalCacheManager.getDatabase();
+    await db.delete(tableName, where: 'businessId = ?', whereArgs: [businessId]);
   }
 
   static Future<void> saveSingleSale(SaleModel sale) async {
@@ -44,6 +125,20 @@ class SaleTable {
       );
       rethrow;
     }
+  }
+
+  /// Saves a local edit without touching `syncedStock`, which only the
+  /// sync writes (a single UPDATE, so it can't race with the sync).
+  static Future<void> saveSaleKeepingSyncedStock(SaleModel sale) async {
+    final db = await LocalCacheManager.getDatabase();
+    final values = sale.toJsonDb()..remove('syncedStock');
+    final updated = await db.update(
+      tableName,
+      values,
+      where: 'id = ?',
+      whereArgs: [sale.id],
+    );
+    if (updated == 0) await saveSingleSale(sale);
   }
 
   static Future<void> saveAllSales(List<SaleModel> sales) async {

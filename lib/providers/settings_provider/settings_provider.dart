@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:sprint_14/cache/tables/settings_table.dart';
-import 'package:sprint_14/models/app_settings_model.dart';
-import 'package:sprint_14/services/native_info_service.dart';
+import 'package:digital_munshi/cache/tables/settings_table.dart';
+import 'package:digital_munshi/models/app_settings_model.dart';
+import 'package:digital_munshi/services/native_info_service.dart';
 part 'settings_provider.g.dart';
 
 @Riverpod(keepAlive: true)

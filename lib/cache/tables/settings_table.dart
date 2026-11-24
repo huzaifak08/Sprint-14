@@ -1,9 +1,9 @@
-import 'package:sprint_14/cache/init_cache.dart';
-import 'package:sprint_14/models/app_settings_model.dart';
+import 'package:digital_munshi/cache/init_cache.dart';
+import 'package:digital_munshi/models/app_settings_model.dart';
 import 'package:sqflite/sqflite.dart';
 
 class SettingsTable {
-  static const String tableName = "sprint_14_app_settings";
+  static const String tableName = "app_settings";
 
   static Future<void> createTable(Database db) async {
     await db.execute('''

@@ -1,8 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:sprint_14/models/user_model.dart';
+import 'package:digital_munshi/models/user_model.dart';
 import 'dart:developer' as dev;
 
-import 'package:sprint_14/services/user_service.dart';
+import 'package:digital_munshi/services/user_service.dart';
 
 enum AuthResult { success, unverified, error }
 

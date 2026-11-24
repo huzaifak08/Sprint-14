@@ -1,20 +1,22 @@
+import 'dart:async';
+
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:sprint_14/providers/business_provider/business_provider.dart';
-import 'package:sprint_14/providers/expense_provider/expense_provider.dart';
-import 'package:sprint_14/providers/participant_provider/participant_provider.dart';
-import 'package:sprint_14/providers/product_provider/product_provider.dart';
-import 'package:sprint_14/providers/sale_provider/sale_provider.dart';
-import 'package:sprint_14/views/business_views/add_update_sale_view.dart';
-import 'package:sprint_14/views/business_views/business_dashboard_view/business_dashboard_view_model.dart';
-import 'package:sprint_14/views/business_views/business_dashboard_view/components/date_filter_controls.dart';
-import 'package:sprint_14/views/business_views/business_dashboard_view/components/header_section.dart';
-import 'package:sprint_14/views/business_views/business_dashboard_view/components/sales_data_table.dart';
-import 'package:sprint_14/views/business_views/business_dashboard_view/components/summary_card.dart';
-import 'package:sprint_14/views/business_views/business_dashboard_view/components/weekly_trend_chart.dart';
-import 'package:sprint_14/views/business_views/expense_view/expense_view.dart';
-import 'package:sprint_14/views/business_views/manage_products_view.dart';
+import 'package:digital_munshi/providers/business_provider/business_provider.dart';
+import 'package:digital_munshi/providers/expense_provider/expense_provider.dart';
+import 'package:digital_munshi/providers/participant_provider/participant_provider.dart';
+import 'package:digital_munshi/providers/product_provider/product_provider.dart';
+import 'package:digital_munshi/providers/sale_provider/sale_provider.dart';
+import 'package:digital_munshi/views/business_views/add_update_sale_view.dart';
+import 'package:digital_munshi/views/business_views/business_dashboard_view/business_dashboard_view_model.dart';
+import 'package:digital_munshi/views/business_views/business_dashboard_view/components/date_filter_controls.dart';
+import 'package:digital_munshi/views/business_views/business_dashboard_view/components/header_section.dart';
+import 'package:digital_munshi/views/business_views/business_dashboard_view/components/sales_data_table.dart';
+import 'package:digital_munshi/views/business_views/business_dashboard_view/components/summary_card.dart';
+import 'package:digital_munshi/views/business_views/business_dashboard_view/components/weekly_trend_chart.dart';
+import 'package:digital_munshi/views/business_views/expense_view/expense_view.dart';
+import 'package:digital_munshi/views/business_views/manage_products_view.dart';
 
 class BusinessDashboardView extends ConsumerStatefulWidget {
   final String businessId;
@@ -27,6 +29,8 @@ class BusinessDashboardView extends ConsumerStatefulWidget {
 
 class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView>
     with WidgetsBindingObserver {
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
+
   @override
   void initState() {
     super.initState();
@@ -34,8 +38,16 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView>
     _initLogic();
   }
 
+  @override
+  void dispose() {
+    _connectivitySub?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
   void _initLogic() {
-    Connectivity().onConnectivityChanged.listen((result) {
+    _connectivitySub = Connectivity().onConnectivityChanged.listen((result) {
+      if (!mounted) return;
       // Check if any connection exists to trigger sync
       if (result.any((r) => r != ConnectivityResult.none)) {
         ref.read(businessProvider.notifier).syncPending();
@@ -102,11 +114,9 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView>
         data: (allSales) {
           final allProducts = productState.value ?? [];
 
-          // 🔥 FIXED: Multi-product dynamic filtering
-          final filteredSales = allSales.where((sale) {
-            final dateMatch = _checkDateMatch(sale.dateTime, uiState);
-            if (!dateMatch) return false;
-
+          // Search applies to every period; the chart needs sales outside
+          // the selected day too (e.g. the last 7 days).
+          final searchedSales = allSales.where((sale) {
             if (uiState.searchQuery.isNotEmpty) {
               final q = uiState.searchQuery.toLowerCase();
 
@@ -129,6 +139,16 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView>
             return true;
           }).toList();
 
+          final filteredSales = searchedSales
+              .where(
+                (sale) => matchesPeriod(
+                  sale.dateTime,
+                  uiState.activeFilter,
+                  uiState.selectedDate,
+                ),
+              )
+              .toList();
+
           return CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
@@ -142,9 +162,9 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView>
                       businessId: widget.businessId,
                     ),
                     const SizedBox(height: 24),
-                    WeeklyTrendChart(sales: filteredSales),
+                    WeeklyTrendChart(sales: searchedSales),
                     const SizedBox(height: 24),
-                    const DateFilterControls(),
+                    DateFilterControls(saleDays: saleDaysOf(allSales)),
                     const SizedBox(height: 32),
                     HeaderSection(
                       uiState: uiState,
@@ -187,18 +207,6 @@ class _BusinessDashboardViewState extends ConsumerState<BusinessDashboardView>
         ),
       ),
     );
-  }
-
-  bool _checkDateMatch(DateTime saleDate, DashboardUiState ui) {
-    if (ui.activeFilter == DashboardFilterType.daily) {
-      return DateUtils.isSameDay(saleDate, ui.selectedDate);
-    } else if (ui.activeFilter == DashboardFilterType.monthly) {
-      return saleDate.month == ui.selectedDate.month &&
-          saleDate.year == ui.selectedDate.year;
-    } else if (ui.activeFilter == DashboardFilterType.yearly) {
-      return saleDate.year == ui.selectedDate.year;
-    }
-    return true;
   }
 
   Widget _buildAppBar(

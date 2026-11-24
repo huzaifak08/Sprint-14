@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:sprint_14/components/app_toast.dart';
+import 'package:digital_munshi/components/app_toast.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
-import 'package:sprint_14/services/auth_service.dart';
-import 'package:sprint_14/views/auth/sign_up_view.dart';
-import 'package:sprint_14/views/auth/verify_email_view.dart';
-import 'package:sprint_14/views/auth/widgets/auth_widgets.dart';
-import 'package:sprint_14/helpers/recent_emails.dart';
-import 'package:sprint_14/services/post_auth_navigation.dart';
+import 'package:digital_munshi/providers/auth_provider/auth_provider.dart';
+import 'package:digital_munshi/services/auth_service.dart';
+import 'package:digital_munshi/views/auth/sign_up_view.dart';
+import 'package:digital_munshi/views/auth/verify_email_view.dart';
+import 'package:digital_munshi/views/auth/widgets/auth_widgets.dart';
+import 'package:digital_munshi/helpers/recent_emails.dart';
+import 'package:digital_munshi/services/post_auth_navigation.dart';
 
 class SignInView extends ConsumerStatefulWidget {
   const SignInView({super.key});

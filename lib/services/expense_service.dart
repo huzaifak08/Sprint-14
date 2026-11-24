@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:sprint_14/helpers/constants.dart';
-import 'package:sprint_14/models/expense_model.dart';
+import 'package:digital_munshi/cache/sync/sync_utils.dart';
+import 'package:digital_munshi/helpers/constants.dart';
+import 'package:digital_munshi/models/expense_model.dart';
 import 'dart:developer' as dev;
 
 class ExpenseService {
@@ -16,27 +17,26 @@ class ExpenseService {
       .collection(expensesCollection);
 
   /// --- 1. SAVE OR UPDATE EXPENSE ---
-  /// Used for both initial sync and editing existing expenses
-  Future<bool> saveExpense({required ExpenseModel expense}) async {
-    try {
-      dev.log(
-        "Syncing Expense to cloud: ${expense.category}",
-        name: "ExpenseService",
-      );
-
-      await expensesRef
-          .doc(expense.id)
-          .set(expense.toMap(), SetOptions(merge: true));
-
-      return true;
-    } catch (err) {
-      dev.log("Cloud Expense Sync Error: $err", name: "ExpenseService");
-      return false;
-    }
+  /// Writes the expense unless the cloud copy was edited more recently, in
+  /// which case nothing is written and the newer cloud copy is returned.
+  /// Returns null when the local copy was saved. Throws on failure.
+  Future<ExpenseModel?> saveExpense({required ExpenseModel expense}) {
+    final doc = expensesRef.doc(expense.id);
+    return FirebaseFirestore.instance.runTransaction((tx) async {
+      final snap = await tx.get(doc);
+      final data = snap.data();
+      if (data != null) {
+        final cloud = ExpenseModel.fromMap({...data, 'id': snap.id});
+        if (isNewerEdit(cloud.updatedAt, expense.updatedAt)) return cloud;
+      }
+      tx.set(doc, expense.toMap(), SetOptions(merge: true));
+      return null;
+    });
   }
 
   /// --- 2. FETCH ALL EXPENSES ---
-  /// Retrieves all records for this business (useful for initial data hydration)
+  /// Retrieves all records for this business. Throws on failure: returning
+  /// an empty list would make the sync think every expense was deleted.
   Future<List<ExpenseModel>> getAllExpenses() async {
     try {
       final snapshot = await expensesRef
@@ -44,11 +44,11 @@ class ExpenseService {
           .get();
 
       return snapshot.docs
-          .map((doc) => ExpenseModel.fromMap(doc.data()))
+          .map((doc) => ExpenseModel.fromMap({...doc.data(), 'id': doc.id}))
           .toList();
     } catch (e) {
       dev.log("Error fetching expenses: $e", name: "ExpenseService");
-      return [];
+      rethrow;
     }
   }
 
@@ -67,27 +67,6 @@ class ExpenseService {
     } catch (err) {
       dev.log("Cloud Expense Deletion Error: $err", name: "ExpenseService");
       return false;
-    }
-  }
-
-  /// --- 4. FETCH EXPENSES BY DATE RANGE ---
-  /// Strategic for "Daily Net Profit" calculations
-  Future<List<ExpenseModel>> getExpensesByDateRange({
-    required DateTime start,
-    required DateTime end,
-  }) async {
-    try {
-      final snapshot = await expensesRef
-          .where('dateTime', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
-          .where('dateTime', isLessThanOrEqualTo: Timestamp.fromDate(end))
-          .get();
-
-      return snapshot.docs
-          .map((doc) => ExpenseModel.fromMap(doc.data()))
-          .toList();
-    } catch (e) {
-      dev.log("Date range fetch error: $e", name: "ExpenseService");
-      return [];
     }
   }
 }

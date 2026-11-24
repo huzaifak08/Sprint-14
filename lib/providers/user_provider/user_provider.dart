@@ -1,7 +1,7 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:sprint_14/cache/tables/user_table.dart';
-import 'package:sprint_14/models/user_model.dart';
-import 'package:sprint_14/services/user_service.dart';
+import 'package:digital_munshi/cache/tables/user_table.dart';
+import 'package:digital_munshi/models/user_model.dart';
+import 'package:digital_munshi/services/user_service.dart';
 import 'dart:developer' as dev;
 
 part 'user_provider.g.dart';

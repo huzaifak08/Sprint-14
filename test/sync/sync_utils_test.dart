@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sprint_14/cache/sync/sync_utils.dart';
+import 'package:digital_munshi/cache/sync/sync_utils.dart';
 
 void main() {
   test('SyncLock never runs the same key in parallel', () async {

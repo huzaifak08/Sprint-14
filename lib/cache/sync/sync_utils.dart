@@ -49,3 +49,12 @@ List<List<T>> chunked<T>(List<T> items, [int size = 30]) {
       items.sublist(i, i + size > items.length ? items.length : i + size),
   ];
 }
+
+/// True when [cloud] is a strictly later edit time than [local], meaning the
+/// cloud copy should win. Records without an edit time (written by older app
+/// versions) count as oldest, so a timed local edit always replaces them.
+bool isNewerEdit(DateTime? cloud, DateTime? local) {
+  if (cloud == null) return false;
+  if (local == null) return true;
+  return cloud.isAfter(local);
+}

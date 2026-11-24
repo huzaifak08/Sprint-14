@@ -1,6 +1,6 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:sprint_14/services/biometric_service.dart';
+import 'package:digital_munshi/services/biometric_service.dart';
 
 part 'biometric_provider.g.dart';
 

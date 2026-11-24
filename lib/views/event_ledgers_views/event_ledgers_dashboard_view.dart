@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:sprint_14/components/app_toast.dart';
+import 'package:digital_munshi/components/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:sprint_14/helpers/theme_widgets.dart';
-import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
-import 'package:sprint_14/providers/event_ledger_provider/event_ledger_provider.dart';
+import 'package:digital_munshi/helpers/theme_widgets.dart';
+import 'package:digital_munshi/providers/auth_provider/auth_provider.dart';
+import 'package:digital_munshi/providers/event_ledger_provider/event_ledger_provider.dart';
 import 'package:uuid/uuid.dart';
-import 'package:sprint_14/models/event_participant_model.dart';
-import 'package:sprint_14/models/event_transaction_model.dart';
+import 'package:digital_munshi/models/event_participant_model.dart';
+import 'package:digital_munshi/models/event_transaction_model.dart';
 
 import 'event_balances.dart';
 import 'event_ledgers_view.dart' show eventTypeIcon;

@@ -1,6 +1,6 @@
 import 'package:sqflite/sqflite.dart';
-import 'package:sprint_14/cache/init_cache.dart'; // 🔥 Import your manager
-import 'package:sprint_14/models/expense_model.dart';
+import 'package:digital_munshi/cache/init_cache.dart'; // 🔥 Import your manager
+import 'package:digital_munshi/models/expense_model.dart';
 import 'dart:developer' as dev;
 
 class ExpenseTable {
@@ -18,12 +18,37 @@ class ExpenseTable {
         amount REAL NOT NULL,
         dateTime TEXT NOT NULL,
         recordedById TEXT NOT NULL,
+        updatedAt TEXT,
         isSynced INTEGER NOT NULL,
         lastSyncAttempt TEXT,
         isDeleted INTEGER NOT NULL
       )
     ''');
+    await createIndexes(db);
     dev.log("Expense Table Created", name: "ExpenseTable");
+  }
+
+  static Future<void> createIndexes(Database db) async {
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_expenses_business_date '
+      'ON $tableName (businessId, dateTime)',
+    );
+  }
+
+  /// v19: edit time for newest-edit-wins sync.
+  static Future<void> migrateV19(Database db) async {
+    await LocalCacheManager.addColumnIfMissing(
+      db,
+      tableName,
+      'updatedAt',
+      'TEXT',
+    );
+    await createIndexes(db);
+  }
+
+  static Future<void> deleteByBusiness(String businessId) async {
+    final db = await LocalCacheManager.getDatabase();
+    await db.delete(tableName, where: 'businessId = ?', whereArgs: [businessId]);
   }
 
   /// --- SAVE / UPDATE SINGLE EXPENSE ---

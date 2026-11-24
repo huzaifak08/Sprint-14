@@ -1,18 +1,35 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class ProductModel {
   final String id;
   final String businessId;
   final String title;
   final bool isTheya;
 
-  /// Determines if the product is 'Open' (Continuous) or 'Fixed' (Limited)
+  /// 'Fixed' (counted pieces), 'Open' (fabric by length) or 'Matching'
+  /// (unlimited, stock not counted).
   final String classification;
 
   final double retailPrice;
   final double msrpPrice;
   final String unitType;
 
-  /// New Field: Tracks remaining inventory
+  /// Stock as last known in the cloud. Never uploaded as a plain value:
+  /// the cloud figure only changes through sales and stock adjustments
+  /// applied in transactions, so devices can't overwrite each other's counts.
+  /// For what is actually on the shelf, use `availableStock` in
+  /// `helpers/stock_ledger.dart`, which also counts changes not uploaded yet.
   final double currentStock;
+
+  /// Local only: a manual stock change (restock / correction) that hasn't
+  /// reached the cloud yet, in units (+ adds stock, - removes it).
+  final double pendingStockDelta;
+
+  /// Local only: id of the pending adjustment, so a retried upload is never
+  /// applied twice.
+  final String? stockAdjustmentId;
+
+  final DateTime? updatedAt;
 
   final bool isSynced;
   final DateTime? lastSyncAttempt;
@@ -27,7 +44,10 @@ class ProductModel {
     required this.retailPrice,
     required this.msrpPrice,
     required this.unitType,
-    required this.currentStock, // Added
+    required this.currentStock,
+    this.pendingStockDelta = 0,
+    this.stockAdjustmentId,
+    this.updatedAt,
     required this.isSynced,
     this.lastSyncAttempt,
     required this.isDeleted,
@@ -44,6 +64,10 @@ class ProductModel {
     double? msrpPrice,
     String? unitType,
     double? currentStock,
+    double? pendingStockDelta,
+    String? stockAdjustmentId,
+    bool clearStockAdjustment = false,
+    DateTime? updatedAt,
     bool? isSynced,
     DateTime? lastSyncAttempt,
     bool? isDeleted,
@@ -58,6 +82,11 @@ class ProductModel {
       msrpPrice: msrpPrice ?? this.msrpPrice,
       unitType: unitType ?? this.unitType,
       currentStock: currentStock ?? this.currentStock,
+      pendingStockDelta: pendingStockDelta ?? this.pendingStockDelta,
+      stockAdjustmentId: clearStockAdjustment
+          ? null
+          : (stockAdjustmentId ?? this.stockAdjustmentId),
+      updatedAt: updatedAt ?? this.updatedAt,
       isSynced: isSynced ?? this.isSynced,
       lastSyncAttempt: lastSyncAttempt ?? this.lastSyncAttempt,
       isDeleted: isDeleted ?? this.isDeleted,
@@ -65,6 +94,7 @@ class ProductModel {
   }
 
   // ===================== FIRESTORE =====================
+  /// Every field except stock, which ProductService writes in a transaction.
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -75,7 +105,7 @@ class ProductModel {
       'retailPrice': retailPrice,
       'msrpPrice': msrpPrice,
       'unitType': unitType,
-      'currentStock': currentStock,
+      'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
     };
   }
 
@@ -90,6 +120,9 @@ class ProductModel {
       msrpPrice: (map['msrpPrice'] as num?)?.toDouble() ?? 0.0,
       unitType: map['unitType'] ?? 'Piece',
       currentStock: (map['currentStock'] as num?)?.toDouble() ?? 0.0,
+      updatedAt: map['updatedAt'] is Timestamp
+          ? (map['updatedAt'] as Timestamp).toDate()
+          : null,
       isSynced: true,
       lastSyncAttempt: null,
       isDeleted: false,
@@ -108,6 +141,9 @@ class ProductModel {
       'msrpPrice': msrpPrice,
       'unitType': unitType,
       'currentStock': currentStock,
+      'pendingStockDelta': pendingStockDelta,
+      'stockAdjustmentId': stockAdjustmentId,
+      'updatedAt': updatedAt?.toIso8601String(),
       'isSynced': isSynced ? 1 : 0,
       'lastSyncAttempt': lastSyncAttempt?.toIso8601String(),
       'isDeleted': isDeleted ? 1 : 0,
@@ -125,6 +161,11 @@ class ProductModel {
       msrpPrice: (json['msrpPrice'] as num?)?.toDouble() ?? 0.0,
       unitType: json['unitType'] ?? 'Piece',
       currentStock: (json['currentStock'] as num?)?.toDouble() ?? 0.0,
+      pendingStockDelta: (json['pendingStockDelta'] as num?)?.toDouble() ?? 0.0,
+      stockAdjustmentId: json['stockAdjustmentId'] as String?,
+      updatedAt: json['updatedAt'] != null
+          ? DateTime.tryParse(json['updatedAt'].toString())
+          : null,
       isSynced: (json['isSynced'] ?? 0) == 1,
       lastSyncAttempt: json['lastSyncAttempt'] != null
           ? DateTime.parse(json['lastSyncAttempt'])
@@ -135,18 +176,25 @@ class ProductModel {
 
   // ===================== HELPER LOGIC =====================
 
-  // Inside ProductModel
-  bool get isInfinite {
-    // If it's 'Matching' or 'Open' (depending on how you want to label Atal),
-    // we treat it as infinite stock.
-    return classification == "Matching" || classification == "Open";
+  /// 'Matching' products are unlimited; every other product's stock is
+  /// counted and reduced by sales.
+  bool get tracksStock => classification != 'Matching';
+
+  /// Products that stay in the sale picker even when their counted stock
+  /// reaches zero (fabric sold by length, and unlimited 'Matching' items).
+  /// The sale form still warns when a sale exceeds the counted stock.
+  bool get alwaysListed => classification == 'Matching' || classification == 'Open';
+
+  /// Whether the product can be picked for a new sale, given its
+  /// [available] stock (see `availableStock` in `helpers/stock_ledger.dart`).
+  bool isAvailableForSale(double available) {
+    if (isDeleted) return false;
+    if (alwaysListed) return true;
+    return available > 0;
   }
 
-  bool get isAvailableForSale {
-    if (isDeleted) return false;
-    if (isInfinite) return true; // Always show Atal/Matching
-    return currentStock > 0; // Only hide fixed articles (suits) when empty
-  }
+  /// Stock at or below this level is shown as running low.
+  double get lowStockThreshold => unitType == 'Piece' ? 2 : 5;
 
   // Inside ProductModel class
   @override

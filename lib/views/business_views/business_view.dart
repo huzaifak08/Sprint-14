@@ -2,14 +2,14 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:sprint_14/components/app_network_image.dart';
-import 'package:sprint_14/responses/user_business_permissions.dart';
-import 'package:sprint_14/views/business_views/participants_management_view.dart';
+import 'package:digital_munshi/components/app_network_image.dart';
+import 'package:digital_munshi/responses/user_business_permissions.dart';
+import 'package:digital_munshi/views/business_views/participants_management_view.dart';
 import 'package:uuid/uuid.dart';
-import 'package:sprint_14/models/business_model.dart';
-import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
-import 'package:sprint_14/providers/business_provider/business_provider.dart';
-import 'package:sprint_14/views/business_views/business_dashboard_view/business_dashboard_view.dart';
+import 'package:digital_munshi/models/business_model.dart';
+import 'package:digital_munshi/providers/auth_provider/auth_provider.dart';
+import 'package:digital_munshi/providers/business_provider/business_provider.dart';
+import 'package:digital_munshi/views/business_views/business_dashboard_view/business_dashboard_view.dart';
 
 class BusinessView extends ConsumerWidget {
   const BusinessView({super.key});
@@ -230,15 +230,43 @@ class _BusinessCard extends ConsumerWidget {
                   ),
                 ),
                 onTap: () {
-                  ref
-                      .read(businessProvider.notifier)
-                      .deleteBusiness(business.id);
                   Navigator.pop(context);
+                  _confirmDelete(context, ref);
                 },
               ),
             const SizedBox(height: 24),
           ],
         ),
+      ),
+    );
+  }
+}
+
+extension on _BusinessCard {
+  void _confirmDelete(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text("Delete ${business.name}?"),
+        content: const Text(
+          "This permanently deletes the business with all its products, "
+          "sales, expenses and team members, on every device. "
+          "This can't be undone.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text("CANCEL"),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              ref.read(businessProvider.notifier).deleteBusiness(business.id);
+            },
+            child: const Text("DELETE", style: TextStyle(color: Colors.red)),
+          ),
+        ],
       ),
     );
   }
@@ -257,12 +285,49 @@ class _BusinessFormSheetState extends ConsumerState<_BusinessFormSheet> {
   late TextEditingController nameController;
   File? _logo;
   String? _remoteLogo;
+  late String _type;
+  late String _currency;
 
   @override
   void initState() {
     super.initState();
     nameController = TextEditingController(text: widget.business?.name);
     _remoteLogo = widget.business?.logoPath;
+    _type = widget.business?.type ?? defaultBusinessType;
+    _currency = widget.business?.currency ?? 'PKR';
+  }
+
+  @override
+  void dispose() {
+    nameController.dispose();
+    super.dispose();
+  }
+
+  Widget _dropdown({
+    required String label,
+    required IconData icon,
+    required String value,
+    required List<String> options,
+    required ValueChanged<String> onChanged,
+  }) {
+    // Keep a value saved by an older version selectable.
+    final items = options.contains(value) ? options : [value, ...options];
+    return DropdownButtonFormField<String>(
+      initialValue: value,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
+      ),
+      items: [
+        for (final option in items)
+          DropdownMenuItem(value: option, child: Text(option)),
+      ],
+      onChanged: (v) {
+        if (v != null) onChanged(v);
+      },
+    );
   }
 
   Future<void> _pickImage() async {
@@ -336,6 +401,32 @@ class _BusinessFormSheetState extends ConsumerState<_BusinessFormSheet> {
               ),
             ),
           ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: _dropdown(
+                  label: "Type",
+                  icon: Icons.category_outlined,
+                  value: _type,
+                  options: businessTypes,
+                  onChanged: (v) => setState(() => _type = v),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: _dropdown(
+                  label: "Currency",
+                  icon: Icons.payments_outlined,
+                  value: _currency,
+                  options: businessCurrencies,
+                  onChanged: (v) => setState(() => _currency = v),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 32),
           SizedBox(
             width: double.infinity,
@@ -344,14 +435,15 @@ class _BusinessFormSheetState extends ConsumerState<_BusinessFormSheet> {
               onPressed: () {
                 // Safely get string UID
                 final uid = user?.uid;
-                if (uid == null || nameController.text.isEmpty) return;
+                final name = nameController.text.trim();
+                if (uid == null || name.isEmpty) return;
 
                 if (widget.business == null) {
                   final newBus = BusinessModel(
                     id: const Uuid().v4(),
-                    name: nameController.text,
-                    type: 'Garments',
-                    currency: 'PKR',
+                    name: name,
+                    type: _type,
+                    currency: _currency,
                     createdAt: DateTime.now(),
                     ownerId: uid,
                     logoPath: _logo?.path,
@@ -362,7 +454,9 @@ class _BusinessFormSheetState extends ConsumerState<_BusinessFormSheet> {
                   ref.read(businessProvider.notifier).addBusiness(newBus);
                 } else {
                   final updated = widget.business!.copyWith(
-                    name: nameController.text,
+                    name: name,
+                    type: _type,
+                    currency: _currency,
                     logoPath: _logo?.path ?? widget.business?.logoPath,
                   );
                   ref.read(businessProvider.notifier).updateBusiness(updated);

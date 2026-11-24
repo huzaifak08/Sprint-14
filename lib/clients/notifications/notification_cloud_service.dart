@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:intl/intl.dart';
-import 'package:sprint_14/helpers/app_data.dart';
+import 'package:digital_munshi/helpers/app_data.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as ts;
 import 'package:flutter_timezone/flutter_timezone.dart';
@@ -27,7 +27,27 @@ class NotificationCloudService {
   static bool _interactionListenerAttached = false;
   static RemoteMessage? _lastForegroundMessage;
 
-  static const String _defaultChannelId = 'sprint14_channel';
+  // Must match the channel used by FCM sends and AndroidManifest.xml.
+  static const String _defaultChannelId = 'digital_munshi_general';
+  static const String _defaultChannelName = 'Digital Munshi notifications';
+
+  /// Creates the default channel up front so pushes received while the app
+  /// is in the background (FCM default channel) use it from the start.
+  Future<void> createDefaultChannel() async {
+    if (!Platform.isAndroid) return;
+    await _flutterLocalNotiPlugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
+        ?.createNotificationChannel(
+          const AndroidNotificationChannel(
+            _defaultChannelId,
+            _defaultChannelName,
+            description: 'Reminders, invites and activity updates',
+            importance: Importance.high,
+          ),
+        );
+  }
 
   //* Notification Permission:
   Future<void> requestNotificationPermission() async {
@@ -68,7 +88,7 @@ class NotificationCloudService {
     _localPluginInitialized = true;
 
     const initSetting = InitializationSettings(
-      android: AndroidInitializationSettings("@mipmap/ic_launcher"),
+      android: AndroidInitializationSettings("@drawable/ic_stat_notification"),
       iOS: DarwinInitializationSettings(),
     );
 
@@ -136,7 +156,7 @@ class NotificationCloudService {
           message.notification?.android?.channelId ?? _defaultChannelId;
       AndroidNotificationChannel channel = AndroidNotificationChannel(
         channelId,
-        channelId,
+        channelId == _defaultChannelId ? _defaultChannelName : channelId,
         importance: Importance.high,
         showBadge: true,
         playSound: true,
@@ -367,12 +387,13 @@ class NotificationCloudService {
       payload: formattedPayload,
       notificationDetails: const NotificationDetails(
         android: AndroidNotificationDetails(
-          'sprint14_channel',
-          'Project Reminders',
+          _defaultChannelId,
+          _defaultChannelName,
           channelDescription: 'Notifications for app testing milestones',
           importance: Importance.max,
           priority: Priority.high,
-          icon: '@mipmap/ic_launcher',
+          icon: '@drawable/ic_stat_notification',
+          color: Color(0xFF4285F4),
         ),
         iOS: DarwinNotificationDetails(),
       ),

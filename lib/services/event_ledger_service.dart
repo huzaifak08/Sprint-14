@@ -1,10 +1,10 @@
 import 'dart:developer' as dev;
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:sprint_14/helpers/constants.dart';
-import 'package:sprint_14/models/event_ledger_model.dart';
-import 'package:sprint_14/models/event_participant_model.dart';
-import 'package:sprint_14/models/event_transaction_model.dart';
-import 'package:sprint_14/models/settlement_milestone_model.dart';
+import 'package:digital_munshi/helpers/constants.dart';
+import 'package:digital_munshi/models/event_ledger_model.dart';
+import 'package:digital_munshi/models/event_participant_model.dart';
+import 'package:digital_munshi/models/event_transaction_model.dart';
+import 'package:digital_munshi/models/settlement_milestone_model.dart';
 
 class EventLedgerService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -63,24 +63,25 @@ class EventLedgerService {
           .map((doc) => doc.data()['eventId'] as String)
           .toList();
 
-      final List<EventLedgerModel> ledgers = [];
+      // Fetched doc-by-doc rather than with `whereIn` on the document id:
+      // security rules can't check a document-id query, so it would be
+      // rejected. Ledgers the user can't read (or that are gone) are skipped.
+      final docs = await Future.wait(
+        targetEventIds.toSet().map((id) async {
+          try {
+            return await _ledgerRef.doc(id).get();
+          } on FirebaseException catch (e) {
+            if (e.code == 'permission-denied') return null;
+            rethrow;
+          }
+        }),
+      );
 
-      for (var i = 0; i < targetEventIds.length; i += 30) {
-        final chunk = targetEventIds.sublist(
-          i,
-          i + 30 > targetEventIds.length ? targetEventIds.length : i + 30,
-        );
-
-        final ledgerSnapshot = await _ledgerRef
-            .where(FieldPath.documentId, whereIn: chunk)
-            .get();
-
-        for (var doc in ledgerSnapshot.docs) {
-          ledgers.add(EventLedgerModel.fromMap(doc.data()));
-        }
-      }
-
-      return ledgers;
+      return [
+        for (final doc in docs)
+          if (doc != null && doc.exists && doc.data() != null)
+            EventLedgerModel.fromMap(doc.data()!),
+      ];
     } catch (e) {
       dev.log(
         "Failed fetching user linked workspaces: $e",

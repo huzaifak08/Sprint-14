@@ -1,20 +1,20 @@
 import 'dart:io';
-import 'package:sprint_14/components/app_toast.dart';
+import 'package:digital_munshi/components/app_toast.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
-import 'package:sprint_14/components/app_network_image.dart';
-import 'package:sprint_14/helpers/theme_widgets.dart';
-import 'package:sprint_14/models/user_model.dart';
-import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
-import 'package:sprint_14/providers/business_provider/business_provider.dart';
-import 'package:sprint_14/providers/current_user_provider/current_user_provider.dart';
-import 'package:sprint_14/providers/event_ledger_provider/event_ledger_provider.dart';
-import 'package:sprint_14/providers/ledger_provider/ledger_provider.dart';
-import 'package:sprint_14/services/auth_service.dart';
+import 'package:digital_munshi/components/app_network_image.dart';
+import 'package:digital_munshi/helpers/theme_widgets.dart';
+import 'package:digital_munshi/models/user_model.dart';
+import 'package:digital_munshi/providers/auth_provider/auth_provider.dart';
+import 'package:digital_munshi/providers/business_provider/business_provider.dart';
+import 'package:digital_munshi/providers/current_user_provider/current_user_provider.dart';
+import 'package:digital_munshi/providers/event_ledger_provider/event_ledger_provider.dart';
+import 'package:digital_munshi/providers/ledger_provider/ledger_provider.dart';
+import 'package:digital_munshi/services/auth_service.dart';
 
 class ProfileView extends ConsumerStatefulWidget {
   const ProfileView({super.key});

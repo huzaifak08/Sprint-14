@@ -1,18 +1,18 @@
 import 'dart:async';
-import 'package:sprint_14/cache/init_cache.dart';
-import 'package:sprint_14/cache/sync/sync_merge.dart';
-import 'package:sprint_14/cache/sync/sync_utils.dart';
+import 'package:digital_munshi/cache/init_cache.dart';
+import 'package:digital_munshi/cache/sync/sync_merge.dart';
+import 'package:digital_munshi/cache/sync/sync_utils.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:sprint_14/models/event_ledger_model.dart';
-import 'package:sprint_14/models/event_participant_model.dart';
-import 'package:sprint_14/models/event_transaction_model.dart';
-import 'package:sprint_14/cache/tables/event_ledger_table.dart';
-import 'package:sprint_14/cache/tables/event_participant_table.dart';
-import 'package:sprint_14/cache/tables/event_transaction_table.dart';
-import 'package:sprint_14/cache/tables/settlement_milestone_table.dart';
-import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
-import 'package:sprint_14/providers/current_user_provider/current_user_provider.dart';
-import 'package:sprint_14/services/event_ledger_service.dart';
+import 'package:digital_munshi/models/event_ledger_model.dart';
+import 'package:digital_munshi/models/event_participant_model.dart';
+import 'package:digital_munshi/models/event_transaction_model.dart';
+import 'package:digital_munshi/cache/tables/event_ledger_table.dart';
+import 'package:digital_munshi/cache/tables/event_participant_table.dart';
+import 'package:digital_munshi/cache/tables/event_transaction_table.dart';
+import 'package:digital_munshi/cache/tables/settlement_milestone_table.dart';
+import 'package:digital_munshi/providers/auth_provider/auth_provider.dart';
+import 'package:digital_munshi/providers/current_user_provider/current_user_provider.dart';
+import 'package:digital_munshi/services/event_ledger_service.dart';
 import 'dart:developer' as dev;
 
 part 'event_ledger_provider.g.dart';
@@ -170,13 +170,15 @@ class EventLedgerNotifier extends _$EventLedgerNotifier {
   Future<void> _syncPendingRecordsToCloud() async {
     if (!await isOnline()) return;
 
-    // A. Sync Ledger Envelopes
+    // A. Sync Ledger Envelopes. Deleted ledgers are removed last (step E):
+    // security rules check the ledger's creator when its participants,
+    // transactions and milestones are deleted, so it must still exist then.
     final unsyncedLedgers = await EventLedgerTable.getUnsyncedLedgers();
+    final deletedLedgers = <EventLedgerModel>[];
     for (var ledger in unsyncedLedgers) {
       try {
         if (ledger.isDeleted) {
-          final success = await _service.deleteLedgerData(ledgerId: ledger.id);
-          if (success) await EventLedgerTable.hardDelete(ledger.id);
+          deletedLedgers.add(ledger);
           continue;
         }
 
@@ -288,6 +290,19 @@ class EventLedgerNotifier extends _$EventLedgerNotifier {
       } catch (e) {
         dev.log(
           "Failed milestone background synchronization: $e",
+          name: "EventLedgerProvider",
+        );
+      }
+    }
+
+    // E. Delete ledger envelopes, now that their children are gone.
+    for (final ledger in deletedLedgers) {
+      try {
+        final success = await _service.deleteLedgerData(ledgerId: ledger.id);
+        if (success) await EventLedgerTable.hardDelete(ledger.id);
+      } catch (e) {
+        dev.log(
+          "Failed deleting ledger envelope ${ledger.id}: $e",
           name: "EventLedgerProvider",
         );
       }

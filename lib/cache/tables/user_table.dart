@@ -1,5 +1,5 @@
-import 'package:sprint_14/cache/init_cache.dart';
-import 'package:sprint_14/models/user_model.dart';
+import 'package:digital_munshi/cache/init_cache.dart';
+import 'package:digital_munshi/models/user_model.dart';
 import 'package:sqflite/sqflite.dart';
 
 class UserTable {

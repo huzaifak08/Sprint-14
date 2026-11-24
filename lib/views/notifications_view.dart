@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:sprint_14/components/app_toast.dart';
+import 'package:digital_munshi/components/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:sprint_14/models/notification_model.dart';
-import 'package:sprint_14/providers/notification_provider/notification_provider.dart';
+import 'package:digital_munshi/models/notification_model.dart';
+import 'package:digital_munshi/providers/notification_provider/notification_provider.dart';
 
 class NotificationsView extends ConsumerWidget {
   const NotificationsView({super.key});

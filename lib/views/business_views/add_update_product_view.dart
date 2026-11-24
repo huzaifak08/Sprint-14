@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:sprint_14/models/product_model.dart';
-import 'package:sprint_14/providers/product_provider/product_provider.dart';
+import 'package:digital_munshi/cache/tables/product_table.dart';
+import 'package:digital_munshi/cache/tables/sale_table.dart';
+import 'package:digital_munshi/helpers/number_input.dart';
+import 'package:digital_munshi/helpers/stock_ledger.dart';
+import 'package:digital_munshi/models/product_model.dart';
+import 'package:digital_munshi/providers/business_provider/business_provider.dart';
+import 'package:digital_munshi/providers/product_provider/product_provider.dart';
 import 'package:uuid/uuid.dart';
 
 class AddUpdateProductView extends ConsumerStatefulWidget {
@@ -32,6 +37,11 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
   String _classification = "Fixed";
   String _unitType = "Piece";
 
+  /// Stock on hand when the form was filled in. Saving with a different
+  /// figure records the difference as a restock / correction.
+  double _shownStock = 0;
+  String _shownStockText = "";
+
   @override
   void initState() {
     super.initState();
@@ -46,11 +56,13 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
           ? widget.product!.msrpPrice.toStringAsFixed(0)
           : "",
     );
-    _stockController = TextEditingController(
-      text: widget.product?.currentStock != null
-          ? widget.product!.currentStock.toString()
-          : "",
-    );
+    _stockController = TextEditingController();
+    final product = widget.product;
+    if (product != null) {
+      // Pending sales are added in _loadAvailableStock; this is a first guess.
+      _setShownStock(product.currentStock + product.pendingStockDelta);
+      _loadAvailableStock(product.id);
+    }
 
     if (widget.product != null) {
       _isTheya = widget.product!.isTheya;
@@ -68,6 +80,57 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
     }
   }
 
+  void _setShownStock(double value) {
+    _shownStock = value;
+    _shownStockText = value % 1 == 0
+        ? value.toStringAsFixed(0)
+        : value.toStringAsFixed(2);
+    _stockController.text = _shownStockText;
+  }
+
+  /// Shows stock on hand including sales not uploaded yet.
+  Future<void> _loadAvailableStock(String productId) async {
+    final row = await ProductTable.getById(productId);
+    if (row == null) return;
+    final pending = pendingStockUse(
+      await SaleTable.getPendingRows(row.businessId),
+    );
+    if (!mounted) return;
+    // Don't overwrite a figure the user has already started typing.
+    if (_stockController.text != _shownStockText) return;
+    setState(() => _setShownStock(availableStock(row, pending)));
+  }
+
+  String? _validateTitle(String? value, List<ProductModel> allProducts) {
+    final title = value?.trim() ?? '';
+    if (title.isEmpty) return "Required";
+    final duplicate = allProducts.any(
+      (p) =>
+          p.id != widget.product?.id &&
+          p.isTheya == _isTheya &&
+          p.title.trim().toLowerCase() == title.toLowerCase(),
+    );
+    return duplicate
+        ? "A ${_isTheya ? 'Theya' : 'Inside'} product with this name exists"
+        : null;
+  }
+
+  String? _validateAmount(String? value) {
+    final amount = parseAmount(value ?? '');
+    if (amount == null) return "Enter a number";
+    if (amount < 0) return "Can't be negative";
+    return null;
+  }
+
+  String? _validateSalePrice(String? value) {
+    final error = _validateAmount(value);
+    if (error != null) return error;
+    final cost = parseAmount(_retailController.text);
+    final price = parseAmount(value ?? '')!;
+    if (cost != null && price < cost) return "Below cost";
+    return null;
+  }
+
   @override
   void dispose() {
     _titleController.dispose();
@@ -78,36 +141,50 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
   }
 
   void _handleSave() {
-    if (_formKey.currentState!.validate()) {
-      double stockValue = (_classification == "Matching")
-          ? 999.0
-          : (double.tryParse(_stockController.text) ?? 0.0);
+    if (!_formKey.currentState!.validate()) return;
 
-      final product = ProductModel(
-        id: widget.product?.id ?? const Uuid().v4(),
-        businessId: widget.businessId,
-        title: _titleController.text.trim(),
-        isTheya: _isTheya,
-        classification: _classification,
-        retailPrice: double.parse(_retailController.text),
-        msrpPrice: double.parse(_msrpController.text),
-        unitType: _unitType,
-        currentStock: stockValue,
-        isSynced: false,
-        isDeleted: false,
+    final tracksStock = _classification != "Matching";
+    final enteredStock = tracksStock
+        ? (parseAmount(_stockController.text) ?? 0.0)
+        : 0.0;
+    final existing = widget.product;
+
+    final details = (existing ??
+            ProductModel(
+              id: const Uuid().v4(),
+              businessId: widget.businessId,
+              title: '',
+              isTheya: _isTheya,
+              classification: _classification,
+              retailPrice: 0,
+              msrpPrice: 0,
+              unitType: _unitType,
+              currentStock: 0,
+              isSynced: false,
+              isDeleted: false,
+            ))
+        .copyWith(
+          title: _titleController.text.trim(),
+          isTheya: _isTheya,
+          classification: _classification,
+          retailPrice: parseAmount(_retailController.text),
+          msrpPrice: parseAmount(_msrpController.text),
+          unitType: _unitType,
+        );
+
+    final notifier = ref.read(productProvider(widget.businessId).notifier);
+    if (existing == null) {
+      notifier.addProduct(details, initialStock: enteredStock);
+    } else {
+      // Only a figure the user actually changed is a stock adjustment.
+      final changed =
+          tracksStock && _stockController.text.trim() != _shownStockText;
+      notifier.updateProduct(
+        details,
+        stockDelta: changed ? enteredStock - _shownStock : 0,
       );
-
-      if (widget.product == null) {
-        ref
-            .read(productProvider(widget.businessId).notifier)
-            .addProduct(product);
-      } else {
-        ref
-            .read(productProvider(widget.businessId).notifier)
-            .updateProduct(product);
-      }
-      Navigator.pop(context);
     }
+    Navigator.pop(context);
   }
 
   @override
@@ -170,6 +247,7 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
                 hint: _classification == "Fixed" ? "e.g., 6" : "e.g., 40.0",
                 icon: Icons.numbers_rounded,
                 isNumber: true,
+                validator: _validateAmount,
               ),
             ],
             const SizedBox(height: 32),
@@ -236,7 +314,7 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
                 "e.g., Midnight Silk 3-PC",
                 Icons.inventory_2_rounded,
               ),
-              validator: (v) => v == null || v.isEmpty ? "Required" : null,
+              validator: (v) => _validateTitle(v, products),
             );
           },
           optionsViewBuilder: (context, onSelected, options) {
@@ -376,6 +454,9 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
   }
 
   Widget _buildPriceInputs() {
+    final currency =
+        ref.watch(singleBusinessProvider(widget.businessId)).value?.currency ??
+        'PKR';
     return Row(
       children: [
         Expanded(
@@ -384,7 +465,8 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
             label: "Our Cost",
             hint: "0",
             isNumber: true,
-            prefix: "PKR",
+            prefix: currency,
+            validator: _validateAmount,
           ),
         ),
         const SizedBox(width: 16),
@@ -394,7 +476,8 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
             label: "Sale Price",
             hint: "0",
             isNumber: true,
-            prefix: "PKR",
+            prefix: currency,
+            validator: _validateSalePrice,
           ),
         ),
       ],
@@ -443,6 +526,7 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
     IconData? icon,
     bool isNumber = false,
     String? prefix,
+    String? Function(String?)? validator,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -496,7 +580,9 @@ class _AddUpdateProductViewState extends ConsumerState<AddUpdateProductView> {
               ),
             ),
           ),
-          validator: (v) => v == null || v.isEmpty ? "Required" : null,
+          validator:
+              validator ??
+              (v) => v == null || v.trim().isEmpty ? "Required" : null,
         ),
       ],
     );

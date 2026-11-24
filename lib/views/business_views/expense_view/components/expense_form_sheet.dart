@@ -1,18 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:sprint_14/helpers/app_data.dart';
-import 'package:sprint_14/models/expense_model.dart';
-import 'package:sprint_14/providers/expense_provider/expense_provider.dart';
-import 'package:sprint_14/providers/current_user_provider/current_user_provider.dart';
+import 'package:intl/intl.dart';
+import 'package:digital_munshi/components/app_toast.dart';
+import 'package:digital_munshi/helpers/app_data.dart';
+import 'package:digital_munshi/helpers/number_input.dart';
+import 'package:digital_munshi/providers/business_provider/business_provider.dart';
+import 'package:digital_munshi/models/expense_model.dart';
+import 'package:digital_munshi/providers/expense_provider/expense_provider.dart';
+import 'package:digital_munshi/providers/current_user_provider/current_user_provider.dart';
 
 class ExpenseFormSheet extends ConsumerStatefulWidget {
   final String businessId;
   final ExpenseModel? existingExpense;
 
+  /// Day a new expense is recorded on (defaults to today).
+  final DateTime? initialDate;
+
   const ExpenseFormSheet({
     super.key,
     required this.businessId,
     this.existingExpense,
+    this.initialDate,
   });
 
   @override
@@ -23,6 +31,7 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
   late TextEditingController amountController;
   late TextEditingController noteController;
   late String selectedCategory;
+  late DateTime selectedDate;
 
   final List<Map<String, dynamic>> categories = [
     {"name": "Tea", "icon": Icons.coffee_rounded},
@@ -39,13 +48,47 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
   @override
   void initState() {
     super.initState();
+    final amount = widget.existingExpense?.amount;
     amountController = TextEditingController(
-      text: widget.existingExpense?.amount.toInt().toString() ?? "",
+      text: amount == null
+          ? ""
+          : (amount % 1 == 0
+                ? amount.toStringAsFixed(0)
+                : amount.toStringAsFixed(2)),
     );
+    selectedDate =
+        widget.existingExpense?.dateTime ??
+        widget.initialDate ??
+        DateTime.now();
     noteController = TextEditingController(
       text: widget.existingExpense?.note ?? "",
     );
     selectedCategory = widget.existingExpense?.category ?? "Tea";
+  }
+
+  String get _currency =>
+      ref.watch(singleBusinessProvider(widget.businessId)).value?.currency ??
+      'PKR';
+
+  /// Changes the day, keeping the original time of day.
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: selectedDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      selectedDate = DateTime(
+        picked.year,
+        picked.month,
+        picked.day,
+        selectedDate.hour,
+        selectedDate.minute,
+        selectedDate.second,
+      );
+    });
   }
 
   @override
@@ -136,12 +179,23 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
             ),
             const SizedBox(height: 16),
           ],
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.calendar_today_rounded),
+            title: Text(
+              DateFormat('EEEE, d MMM yyyy').format(selectedDate),
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            trailing: const Icon(Icons.edit_calendar_rounded),
+            onTap: _pickDate,
+          ),
+          const SizedBox(height: 12),
           TextField(
             controller: amountController,
-            keyboardType: TextInputType.number,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             decoration: InputDecoration(
-              labelText: "Amount (PKR)",
+              labelText: "Amount ($_currency)",
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(15),
               ),
@@ -155,25 +209,30 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
             height: 55,
             child: ElevatedButton(
               onPressed: () {
-                if (amountController.text.isEmpty || user == null) return;
+                if (user == null) return;
+                final amount = parseAmount(amountController.text);
+                if (amount == null || amount <= 0) {
+                  AppToast.error("Enter an amount above 0.");
+                  return;
+                }
+                final note = noteController.text.trim();
+                final keepNote = selectedCategory == "Other" && note.isNotEmpty;
 
                 final expense =
                     widget.existingExpense?.copyWith(
                       category: selectedCategory,
-                      note: selectedCategory == "Other"
-                          ? noteController.text.trim()
-                          : null,
-                      amount: double.parse(amountController.text),
+                      note: keepNote ? note : null,
+                      clearNote: !keepNote,
+                      amount: amount,
+                      dateTime: selectedDate,
                     ) ??
                     ExpenseModel(
                       id: AppData.shared.uuid.v4(),
                       businessId: widget.businessId,
                       category: selectedCategory,
-                      note: selectedCategory == "Other"
-                          ? noteController.text.trim()
-                          : null,
-                      amount: double.parse(amountController.text),
-                      dateTime: DateTime.now(),
+                      note: keepNote ? note : null,
+                      amount: amount,
+                      dateTime: selectedDate,
                       recordedById: user.uid,
                       isSynced: false,
                       isDeleted: false,

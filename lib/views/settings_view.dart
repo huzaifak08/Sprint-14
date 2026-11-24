@@ -1,20 +1,21 @@
 import 'package:app_settings/app_settings.dart';
-import 'package:sprint_14/components/app_toast.dart';
+import 'package:digital_munshi/helpers/constants.dart';
+import 'package:digital_munshi/components/app_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:sprint_14/cache/init_cache.dart';
-import 'package:sprint_14/cache/sync/pending_sync.dart';
-import 'package:sprint_14/components/app_network_image.dart';
-import 'package:sprint_14/helpers/theme_widgets.dart';
-import 'package:sprint_14/models/business_model.dart';
-import 'package:sprint_14/models/user_model.dart';
-import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
-import 'package:sprint_14/providers/biometric_provider/biometric_provider.dart';
-import 'package:sprint_14/providers/business_provider/business_provider.dart';
-import 'package:sprint_14/providers/settings_provider/settings_provider.dart';
-import 'package:sprint_14/providers/current_user_provider/current_user_provider.dart';
-import 'package:sprint_14/views/auth/sign_in_view.dart';
-import 'package:sprint_14/views/profile_view.dart';
+import 'package:digital_munshi/cache/init_cache.dart';
+import 'package:digital_munshi/cache/sync/pending_sync.dart';
+import 'package:digital_munshi/components/app_network_image.dart';
+import 'package:digital_munshi/helpers/theme_widgets.dart';
+import 'package:digital_munshi/models/business_model.dart';
+import 'package:digital_munshi/models/user_model.dart';
+import 'package:digital_munshi/providers/auth_provider/auth_provider.dart';
+import 'package:digital_munshi/providers/biometric_provider/biometric_provider.dart';
+import 'package:digital_munshi/providers/business_provider/business_provider.dart';
+import 'package:digital_munshi/providers/settings_provider/settings_provider.dart';
+import 'package:digital_munshi/providers/current_user_provider/current_user_provider.dart';
+import 'package:digital_munshi/views/auth/sign_in_view.dart';
+import 'package:digital_munshi/views/profile_view.dart';
 
 /// Whether any local change is still waiting to be uploaded.
 final _hasUnsyncedProvider = FutureProvider.autoDispose<bool>(
@@ -709,7 +710,7 @@ class _VersionFooter extends ConsumerWidget {
     final theme = Theme.of(context);
     return Center(
       child: Text(
-        version == null ? 'Sprint14' : 'Sprint14 · v$version',
+        version == null ? appName : '$appName · v$version',
         style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
       ),
     );

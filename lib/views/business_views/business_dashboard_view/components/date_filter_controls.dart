@@ -1,15 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:sprint_14/views/business_views/business_dashboard_view/business_dashboard_view_model.dart';
+import 'package:digital_munshi/views/business_views/business_dashboard_view/business_dashboard_view_model.dart';
 
 class DateFilterControls extends ConsumerWidget {
-  const DateFilterControls({super.key});
+  /// Days (date only) with at least one sale; the daily arrows skip the rest.
+  final Set<DateTime> saleDays;
+  const DateFilterControls({super.key, this.saleDays = const {}});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final ui = ref.watch(dashboardUiProvider);
     final notifier = ref.read(dashboardUiProvider.notifier);
+    final canGoBack =
+        steppedDate(ui.activeFilter, ui.selectedDate, -1, saleDays) != null;
+    final canGoForward =
+        steppedDate(ui.activeFilter, ui.selectedDate, 1, saleDays) != null;
 
     return Column(
       children: [
@@ -46,7 +52,9 @@ class DateFilterControls extends ConsumerWidget {
               children: [
                 IconButton(
                   icon: const Icon(Icons.chevron_left),
-                  onPressed: () => notifier.adjustDate(-1),
+                  onPressed: canGoBack
+                      ? () => notifier.adjustDate(-1, saleDays: saleDays)
+                      : null,
                 ),
                 const SizedBox(width: 16),
                 Text(
@@ -64,7 +72,9 @@ class DateFilterControls extends ConsumerWidget {
                 const SizedBox(width: 16),
                 IconButton(
                   icon: const Icon(Icons.chevron_right),
-                  onPressed: () => notifier.adjustDate(1),
+                  onPressed: canGoForward
+                      ? () => notifier.adjustDate(1, saleDays: saleDays)
+                      : null,
                 ),
               ],
             ),

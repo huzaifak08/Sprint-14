@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sprint_14/cache/sync/sync_merge.dart';
+import 'package:digital_munshi/cache/sync/sync_merge.dart';
 
 class Item {
   final String id;

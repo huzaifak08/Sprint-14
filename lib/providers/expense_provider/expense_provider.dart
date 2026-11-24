@@ -1,11 +1,11 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:sprint_14/cache/init_cache.dart';
-import 'package:sprint_14/cache/sync/sync_merge.dart';
-import 'package:sprint_14/cache/sync/sync_utils.dart';
-import 'package:sprint_14/cache/tables/expense_table.dart';
-import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
-import 'package:sprint_14/models/expense_model.dart';
-import 'package:sprint_14/services/expense_service.dart';
+import 'package:digital_munshi/cache/init_cache.dart';
+import 'package:digital_munshi/cache/sync/sync_merge.dart';
+import 'package:digital_munshi/cache/sync/sync_utils.dart';
+import 'package:digital_munshi/cache/tables/expense_table.dart';
+import 'package:digital_munshi/providers/auth_provider/auth_provider.dart';
+import 'package:digital_munshi/models/expense_model.dart';
+import 'package:digital_munshi/services/expense_service.dart';
 import 'dart:developer' as dev;
 
 part 'expense_provider.g.dart';
@@ -71,7 +71,11 @@ class ExpenseNotifier extends _$ExpenseNotifier {
 
   /// --- 2. Add Expense ---
   Future<void> addExpense(ExpenseModel expense) async {
-    final local = expense.copyWith(isSynced: false, isDeleted: false);
+    final local = expense.copyWith(
+      isSynced: false,
+      isDeleted: false,
+      updatedAt: DateTime.now(),
+    );
 
     // Update UI immediately
     final current = state.value ?? [];
@@ -83,7 +87,7 @@ class ExpenseNotifier extends _$ExpenseNotifier {
 
   /// --- 3. Update Expense ---
   Future<void> updateExpense(ExpenseModel updated) async {
-    final local = updated.copyWith(isSynced: false);
+    final local = updated.copyWith(isSynced: false, updatedAt: DateTime.now());
 
     state = AsyncData([
       for (final e in state.value ?? [])
@@ -100,7 +104,11 @@ class ExpenseNotifier extends _$ExpenseNotifier {
     final index = current.indexWhere((e) => e.id == id);
     if (index == -1) return;
     final expense = current[index];
-    final deletedMarker = expense.copyWith(isDeleted: true, isSynced: false);
+    final deletedMarker = expense.copyWith(
+      isDeleted: true,
+      isSynced: false,
+      updatedAt: DateTime.now(),
+    );
 
     // Remove from UI list immediately
     state = AsyncData(current.where((e) => e.id != id).toList());
@@ -132,17 +140,16 @@ class ExpenseNotifier extends _$ExpenseNotifier {
           continue;
         }
 
-        final success = await service.saveExpense(expense: e);
-        if (success &&
-            await LocalCacheManager.markSyncedIfUnchanged(
-              ExpenseTable.tableName,
-              e.toJsonDb(),
-            )) {
-          final current = state.value ?? [];
-          state = AsyncData([
-            for (final item in current)
-              if (item.id == e.id) item.copyWith(isSynced: true) else item,
-          ]);
+        final newerCloud = await service.saveExpense(expense: e);
+        final unchanged = await LocalCacheManager.markSyncedIfUnchanged(
+          ExpenseTable.tableName,
+          e.toJsonDb(),
+        );
+        if (newerCloud != null && unchanged) {
+          // Another device edited it more recently: keep their version.
+          await ExpenseTable.saveSingleExpense(
+            newerCloud.copyWith(isSynced: true),
+          );
         }
       } catch (err) {
         dev.log(
@@ -150,6 +157,12 @@ class ExpenseNotifier extends _$ExpenseNotifier {
           name: "ExpenseProvider",
         );
       }
+    }
+
+    if (unsynced.isNotEmpty) {
+      state = AsyncData(
+        await ExpenseTable.getAllExpensesFromCache(businessId),
+      );
     }
   }
 

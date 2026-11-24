@@ -1,0 +1,146 @@
+rules_version = '2';
+
+// Firestore security rules for Digital Munshi.
+// Deploy: firebase deploy --only firestore:rules
+//
+// Access model:
+//  - users/{uid}/**            -> only that user (others may only drop a notification in)
+//  - businesses/{id}/**        -> owner + ACTIVE staff (participants/{id}_{uid})
+//  - participants/{bid}_{uid}  -> the staff member reads own; owner/admin manage
+//  - event_* collections       -> only the ledger creator (other members are name-only)
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- helpers ----------
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function uid() {
+      return request.auth.uid;
+    }
+
+    function businessDoc(bid) {
+      return get(/databases/$(database)/documents/businesses/$(bid));
+    }
+
+    function staffDoc(bid) {
+      return /databases/$(database)/documents/participants/$(bid + '_' + uid());
+    }
+
+    function isOwner(bid) {
+      return signedIn() && businessDoc(bid).data.ownerId == uid();
+    }
+
+    function isActiveStaff(bid) {
+      return signedIn()
+        && exists(staffDoc(bid))
+        && get(staffDoc(bid)).data.isActive == true;
+    }
+
+    function isAdmin(bid) {
+      return isActiveStaff(bid) && get(staffDoc(bid)).data.role == 'admin';
+    }
+
+    function isMember(bid) {
+      return isOwner(bid) || isActiveStaff(bid);
+    }
+
+    function isEventCreator(eventId) {
+      return signedIn()
+        && get(/databases/$(database)/documents/event_ledgers/$(eventId)).data.creatorId == uid();
+    }
+
+    // ---------- users ----------
+    match /users/{userId} {
+      // Any signed-in user may read a single profile (staff roster names,
+      // invite lookups). Listing is capped at 1 result so the collection
+      // can't be dumped; the invite-by-email query uses limit(1).
+      allow get: if signedIn();
+      allow list: if signedIn() && request.query.limit <= 1;
+      allow create, update, delete: if signedIn() && uid() == userId;
+
+      match /ledgers/{ledgerId} {
+        allow read, write: if signedIn() && uid() == userId;
+      }
+
+      match /notifications/{notificationId} {
+        allow read, update, delete: if signedIn() && uid() == userId;
+        // Anyone signed in can send a notification to this user, but it
+        // must be addressed to them.
+        allow create: if signedIn() && request.resource.data.userId == userId;
+      }
+    }
+
+    // ---------- businesses ----------
+    match /businesses/{bid} {
+      // ownerId is checked on the doc itself so `where('ownerId', ==, uid)`
+      // queries pass; staff fetch their businesses by single-doc gets.
+      allow read: if signedIn()
+        && (resource.data.ownerId == uid() || isActiveStaff(bid));
+
+      allow create: if signedIn() && request.resource.data.ownerId == uid();
+
+      // Owner edits anything; admins edit too (incl. staff roster), but
+      // nobody can hand the business to someone else.
+      allow update: if (isOwner(bid) || isAdmin(bid))
+        && request.resource.data.ownerId == resource.data.ownerId;
+
+      allow delete: if isOwner(bid);
+
+      // products, sales, expenses
+      match /{sub}/{docId} {
+        allow read, write: if sub in ['products', 'sales', 'expenses'] && isMember(bid);
+      }
+    }
+
+    // ---------- business staff links ----------
+    // Doc id is "{businessId}_{userId}".
+    match /participants/{linkId} {
+      // Staff member reads their own links; owner/staff read the roster.
+      allow read: if signedIn() && (
+        resource.data.userId == uid() || isMember(resource.data.businessId)
+      );
+
+      allow create: if signedIn()
+        && linkId == request.resource.data.businessId + '_' + request.resource.data.userId
+        && request.resource.data.role in ['admin', 'salesman']
+        && (isOwner(request.resource.data.businessId) || isAdmin(request.resource.data.businessId));
+
+      allow update: if signedIn()
+        && request.resource.data.businessId == resource.data.businessId
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.role in ['admin', 'salesman']
+        && (isOwner(resource.data.businessId) || isAdmin(resource.data.businessId));
+
+      allow delete: if signedIn()
+        && (isOwner(resource.data.businessId) || isAdmin(resource.data.businessId));
+    }
+
+    // ---------- event ledgers ----------
+    match /event_ledgers/{eventId} {
+      allow read, update, delete: if signedIn() && resource.data.creatorId == uid();
+      allow create: if signedIn() && request.resource.data.creatorId == uid();
+    }
+
+    match /event_participants/{id} {
+      allow read: if signedIn() && (
+        resource.data.userId == uid() || isEventCreator(resource.data.eventId)
+      );
+      allow update, delete: if isEventCreator(resource.data.eventId);
+      allow create: if isEventCreator(request.resource.data.eventId);
+    }
+
+    match /event_transactions/{id} {
+      allow read, update, delete: if isEventCreator(resource.data.eventId);
+      allow create: if isEventCreator(request.resource.data.eventId);
+    }
+
+    match /event_settlement_milestones/{id} {
+      allow read, update, delete: if isEventCreator(resource.data.eventId);
+      allow create: if isEventCreator(request.resource.data.eventId);
+    }
+
+    // Everything else is denied by default.
+  }
+}

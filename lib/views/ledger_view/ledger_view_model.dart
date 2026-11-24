@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
-import 'package:sprint_14/models/ledger_model.dart';
-import 'package:sprint_14/providers/ledger_provider/ledger_provider.dart';
+import 'package:digital_munshi/models/ledger_model.dart';
+import 'package:digital_munshi/providers/ledger_provider/ledger_provider.dart';
 
 // =========================================================================
 // QUERY MODEL

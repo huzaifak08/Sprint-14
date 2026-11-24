@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:sprint_14/views/business_views/add_update_sale_view.dart';
-import 'package:sprint_14/views/business_views/manage_products_view.dart';
+import 'package:digital_munshi/views/business_views/add_update_sale_view.dart';
+import 'package:digital_munshi/views/business_views/manage_products_view.dart';
 
 class QuickActionHeader extends StatelessWidget {
   final String businessId;

@@ -1,7 +1,7 @@
 import 'dart:developer' as dev;
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:sprint_14/helpers/constants.dart'; // Contains our central firestore refs
-import 'package:sprint_14/models/participant_model.dart';
+import 'package:digital_munshi/helpers/constants.dart'; // Contains our central firestore refs
+import 'package:digital_munshi/models/participant_model.dart';
 
 class ParticipantService {
   final FirebaseFirestore firestore = FirebaseFirestore.instance;

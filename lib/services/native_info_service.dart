@@ -1,6 +1,6 @@
 import 'dart:developer' as dev;
 import 'package:flutter/services.dart';
-import 'package:sprint_14/helpers/constants.dart';
+import 'package:digital_munshi/helpers/constants.dart';
 
 class NativeInfoService {
   static const _channel = MethodChannel(methodChannel);

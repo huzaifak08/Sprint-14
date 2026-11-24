@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:sprint_14/components/sync_status_badge.dart';
-import 'package:sprint_14/models/sale_model.dart';
-import 'package:sprint_14/views/business_views/add_update_sale_view.dart';
-import 'package:sprint_14/views/business_views/business_dashboard_view/business_dashboard_view_model.dart';
+import 'package:digital_munshi/components/sync_status_badge.dart';
+import 'package:digital_munshi/models/sale_model.dart';
+import 'package:digital_munshi/views/business_views/add_update_sale_view.dart';
+import 'package:digital_munshi/views/business_views/business_dashboard_view/business_dashboard_view_model.dart';
 
 class SalesDataTable extends ConsumerWidget {
   final List<SaleModel> sales;
@@ -172,7 +172,7 @@ class SalesDataTable extends ConsumerWidget {
                   ),
                   DataCell(
                     Text(
-                      sale.quantity.toStringAsFixed(1),
+                      sale.quantityLabel,
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
                         color: theme.colorScheme.onSurface.withValues(

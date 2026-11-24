@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:sprint_14/helpers/app_data.dart';
-import 'package:sprint_14/helpers/theme_widgets.dart';
+import 'package:digital_munshi/helpers/app_data.dart';
+import 'package:digital_munshi/helpers/theme_widgets.dart';
 
 enum ToastType { success, error, info }
 

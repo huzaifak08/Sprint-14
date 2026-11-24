@@ -1,6 +1,6 @@
 import 'package:sqflite/sqflite.dart';
-import 'package:sprint_14/cache/init_cache.dart';
-import 'package:sprint_14/models/settlement_milestone_model.dart';
+import 'package:digital_munshi/cache/init_cache.dart';
+import 'package:digital_munshi/models/settlement_milestone_model.dart';
 
 class SettlementMilestoneTable {
   static const String tableName = "settlement_milestones";

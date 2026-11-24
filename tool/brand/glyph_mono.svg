@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Single-colour mark: Android uses only the alpha channel for themed
+       (monochrome) icons and status-bar notification icons. Pages are
+       semi-transparent so the rows and bars stay readable. -->
+  <g transform="translate(0,-34)" fill="#FFFFFF">
+    <!-- Only the cover's bottom edge: a solid cover would fill in the pages. -->
+    <path d="M236,728 C330,706 440,716 512,758 C584,716 694,706 788,728" stroke="#FFFFFF" stroke-width="22" stroke-linecap="round" fill="none"/>
+    <path d="M512,370 C440,326 330,314 250,334 L250,704 C330,684 440,694 512,738 Z" fill-opacity="0.38"/>
+    <path d="M512,370 C584,326 694,314 774,334 L774,704 C694,684 584,694 512,738 Z" fill-opacity="0.38"/>
+    <g stroke="#FFFFFF" stroke-width="26" stroke-linecap="round" fill="none">
+      <path d="M302,436 L462,452"/>
+      <path d="M302,502 L462,516"/>
+      <path d="M302,568 L462,580"/>
+      <path d="M302,634 L410,642"/>
+    </g>
+    <rect x="566" y="560" width="46" height="112" rx="12"/>
+    <rect x="632" y="498" width="46" height="174" rx="12"/>
+    <rect x="698" y="428" width="46" height="244" rx="12"/>
+  </g>
+</svg>

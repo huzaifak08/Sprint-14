@@ -1,20 +1,27 @@
 import 'dart:io';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:sprint_14/cache/init_cache.dart';
-import 'package:sprint_14/cache/sync/sync_merge.dart';
-import 'package:sprint_14/cache/sync/sync_utils.dart';
-import 'package:sprint_14/cache/tables/business_table.dart';
-import 'package:sprint_14/models/business_model.dart';
-import 'package:sprint_14/models/participant_model.dart';
-import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
-import 'package:sprint_14/providers/current_user_provider/current_user_provider.dart';
-import 'package:sprint_14/providers/participant_provider/participant_provider.dart';
-import 'package:sprint_14/responses/user_business_permissions.dart';
-import 'package:sprint_14/services/business_service.dart';
+import 'package:digital_munshi/cache/init_cache.dart';
+import 'package:digital_munshi/cache/sync/sync_merge.dart';
+import 'package:digital_munshi/cache/sync/sync_utils.dart';
+import 'package:digital_munshi/cache/tables/business_table.dart';
+import 'package:digital_munshi/cache/tables/expense_table.dart';
+import 'package:digital_munshi/cache/tables/participant_table.dart';
+import 'package:digital_munshi/cache/tables/product_table.dart';
+import 'package:digital_munshi/cache/tables/sale_table.dart';
+import 'package:digital_munshi/models/business_model.dart';
+import 'package:digital_munshi/models/participant_model.dart';
+import 'package:digital_munshi/providers/auth_provider/auth_provider.dart';
+import 'package:digital_munshi/providers/current_user_provider/current_user_provider.dart';
+import 'package:digital_munshi/providers/expense_provider/expense_provider.dart';
+import 'package:digital_munshi/providers/participant_provider/participant_provider.dart';
+import 'package:digital_munshi/providers/product_provider/product_provider.dart';
+import 'package:digital_munshi/providers/sale_provider/sale_provider.dart';
+import 'package:digital_munshi/responses/user_business_permissions.dart';
+import 'package:digital_munshi/services/business_service.dart';
 import 'dart:developer' as dev;
 
-import 'package:sprint_14/services/storage_service.dart';
+import 'package:digital_munshi/services/storage_service.dart';
 
 part 'business_provider.g.dart';
 
@@ -124,6 +131,19 @@ class BusinessNotifier extends _$BusinessNotifier {
     state = AsyncData(current.where((b) => b.id != id).toList());
 
     await BusinessTable.saveSingleBusiness(deletedMarker);
+
+    // The business's own data goes with it. Dropping it locally also stops
+    // pending sales/products/expenses from being re-uploaded under a
+    // business that is being deleted.
+    await ProductTable.deleteByBusiness(id);
+    await SaleTable.deleteByBusiness(id);
+    await ExpenseTable.deleteByBusiness(id);
+    await ParticipantTable.deleteByBusiness(id);
+    ref.invalidate(productProvider(id));
+    ref.invalidate(saleProvider(id));
+    ref.invalidate(expenseProvider(id));
+    ref.invalidate(participantProvider(id));
+
     syncPending();
   }
 
@@ -144,14 +164,19 @@ class BusinessNotifier extends _$BusinessNotifier {
       try {
         // --- HANDLE DELETION ---
         if (b.isDeleted) {
-          // 1. Delete Logo from Storage using the correct path
-          await StorageService().deleteBusinessLogo(b.id);
-
-          // 2. Delete Data from Firestore
+          // 1. Delete the business and everything under it from Firestore.
           final success = await service.deleteBusinessData(businessId: b.id);
+          if (!success) continue; // Retried on the next sync.
+
+          // 2. Only then the logo, so a failed delete keeps its logo.
+          try {
+            await StorageService().deleteBusinessLogo(b.id);
+          } catch (e) {
+            dev.log("Logo delete failed for ${b.id}: $e", name: "BusinessProvider");
+          }
 
           // 3. Remove from Local Cache
-          if (success) await BusinessTable.hardDelete(b.id);
+          await BusinessTable.hardDelete(b.id);
           continue;
         }
 
@@ -176,12 +201,18 @@ class BusinessNotifier extends _$BusinessNotifier {
         final toSync = b.copyWith(logoPath: finalLogoUrl);
         final success = await service.saveBusiness(business: toSync);
 
-        if (success) {
+        // Mark synced only if the business wasn't edited during the upload;
+        // otherwise the newer edit stays pending and is uploaded next pass.
+        if (success &&
+            await LocalCacheManager.markSyncedIfUnchanged(
+              BusinessTable.tableName,
+              b.toJsonDb(),
+              alsoSet: {'logoPath': finalLogoUrl},
+            )) {
           final synced = toSync.copyWith(
             isSynced: true,
             lastSyncAttempt: DateTime.now(),
           );
-          await BusinessTable.saveSingleBusiness(synced);
 
           // Update State
           final current = state.value ?? [];

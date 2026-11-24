@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:sprint_14/helpers/app_data.dart';
-import 'package:sprint_14/models/expense_model.dart';
-import 'package:sprint_14/providers/expense_provider/expense_provider.dart';
-import 'package:sprint_14/providers/current_user_provider/current_user_provider.dart';
+import 'package:digital_munshi/components/app_toast.dart';
+import 'package:digital_munshi/helpers/app_data.dart';
+import 'package:digital_munshi/helpers/number_input.dart';
+import 'package:digital_munshi/providers/business_provider/business_provider.dart';
+import 'package:digital_munshi/models/expense_model.dart';
+import 'package:digital_munshi/providers/expense_provider/expense_provider.dart';
+import 'package:digital_munshi/providers/current_user_provider/current_user_provider.dart';
 
 class AddExpenseSheet extends ConsumerStatefulWidget {
   final String businessId;
@@ -165,10 +168,11 @@ class _AddExpenseSheetState extends ConsumerState<AddExpenseSheet> {
           // Amount Field
           TextField(
             controller: amountController,
-            keyboardType: TextInputType.number,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             decoration: InputDecoration(
-              labelText: "Amount (PKR)",
+              labelText:
+                  "Amount (${ref.watch(singleBusinessProvider(widget.businessId)).value?.currency ?? 'PKR'})",
               prefixIcon: const Icon(Icons.payments_outlined),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(15),
@@ -192,7 +196,12 @@ class _AddExpenseSheetState extends ConsumerState<AddExpenseSheet> {
                 ),
               ),
               onPressed: () {
-                if (amountController.text.isEmpty || user == null) return;
+                if (user == null) return;
+                final amount = parseAmount(amountController.text);
+                if (amount == null || amount <= 0) {
+                  AppToast.error("Enter an amount above 0.");
+                  return;
+                }
 
                 // 🔥 COMBINE PICKED DATE WITH CURRENT TIME
                 final now = DateTime.now();
@@ -212,7 +221,7 @@ class _AddExpenseSheetState extends ConsumerState<AddExpenseSheet> {
                   note: selectedCategory == "Other"
                       ? noteController.text.trim()
                       : null,
-                  amount: double.parse(amountController.text),
+                  amount: amount,
                   dateTime: finalDateTime, // 🔥 Fixed: uses selected day
                   recordedById: user.uid,
                   isSynced: false,

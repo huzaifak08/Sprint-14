@@ -1,6 +1,6 @@
 import 'dart:developer' as dev;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:sprint_14/cache/init_cache.dart';
+import 'package:digital_munshi/cache/init_cache.dart';
 
 /// Tracks which account the local SQLite cache belongs to.
 ///
@@ -10,7 +10,7 @@ import 'package:sprint_14/cache/init_cache.dart';
 class CacheOwner {
   CacheOwner._();
 
-  static const String _key = 'sprint-14-cache-owner-uid';
+  static const String _key = 'dm-cache-owner-uid';
 
   static Future<void> ensureOwner(String uid) async {
     try {

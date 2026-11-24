@@ -1,9 +1,9 @@
 import 'dart:developer' as dev;
-import 'package:sprint_14/clients/notifications/send_notification_service.dart';
-import 'package:sprint_14/providers/app_provider_container.dart';
-import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
-import 'package:sprint_14/providers/notification_provider/notification_provider.dart';
-import 'package:sprint_14/providers/user_provider/user_provider.dart';
+import 'package:digital_munshi/clients/notifications/send_notification_service.dart';
+import 'package:digital_munshi/providers/app_provider_container.dart';
+import 'package:digital_munshi/providers/auth_provider/auth_provider.dart';
+import 'package:digital_munshi/providers/notification_provider/notification_provider.dart';
+import 'package:digital_munshi/providers/user_provider/user_provider.dart';
 
 Future<void> saveAndSendNotification({
   required String title,

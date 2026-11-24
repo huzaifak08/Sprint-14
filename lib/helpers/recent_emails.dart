@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class RecentEmails {
   RecentEmails._();
 
-  static const _key = 'sprint-14-recent-emails';
+  static const _key = 'dm-recent-emails';
   static const _max = 5;
 
   static Future<List<String>> load() async {

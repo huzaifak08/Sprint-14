@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:developer' as dev;
 import 'package:http/http.dart' as http;
-import 'package:sprint_14/clients/notifications/notification_server_key.dart';
+import 'package:digital_munshi/clients/notifications/notification_server_key.dart';
 
 class SendNotificationService {
   static Future<void> sendNotification({
@@ -44,7 +44,7 @@ class SendNotificationService {
             "priority": "high", // ✅ This is correct! Wakes up the device.
             "notification": {
               "channel_id":
-                  "sprint14_channel", // ✅ Maps to your Flutter channel
+                  "digital_munshi_general", // matches the app's default channel
               "sound": "default",
               "default_sound": true,
               // ❌ Removed 'importance' and 'priority' from here since they belong to the device channel setup itself

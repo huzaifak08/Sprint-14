@@ -1,13 +1,13 @@
 import 'dart:async';
 import 'dart:developer' as dev;
 import 'package:flutter/material.dart';
-import 'package:sprint_14/cache/sync/pending_sync.dart';
-import 'package:sprint_14/models/business_model.dart';
-import 'package:sprint_14/providers/business_provider/business_provider.dart';
-import 'package:sprint_14/providers/current_user_provider/current_user_provider.dart';
-import 'package:sprint_14/providers/settings_provider/settings_provider.dart';
-import 'package:sprint_14/views/business_views/business_dashboard_view/business_dashboard_view.dart';
-import 'package:sprint_14/views/home_view.dart';
+import 'package:digital_munshi/cache/sync/pending_sync.dart';
+import 'package:digital_munshi/models/business_model.dart';
+import 'package:digital_munshi/providers/business_provider/business_provider.dart';
+import 'package:digital_munshi/providers/current_user_provider/current_user_provider.dart';
+import 'package:digital_munshi/providers/settings_provider/settings_provider.dart';
+import 'package:digital_munshi/views/business_views/business_dashboard_view/business_dashboard_view.dart';
+import 'package:digital_munshi/views/home_view.dart';
 
 /// Opens the signed-in part of the app, honouring the "Start screen"
 /// setting (Home, or straight into a business dashboard on top of Home).

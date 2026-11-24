@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sprint_14/views/auth/widgets/auth_widgets.dart';
+import 'package:digital_munshi/views/auth/widgets/auth_widgets.dart';
 
 void main() {
   test('accepts normal addresses (with surrounding spaces)', () {

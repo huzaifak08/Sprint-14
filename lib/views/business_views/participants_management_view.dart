@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:sprint_14/components/app_toast.dart';
+import 'package:digital_munshi/components/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:sprint_14/components/app_network_image.dart';
-import 'package:sprint_14/helpers/app_data.dart';
-import 'package:sprint_14/models/participant_model.dart';
-import 'package:sprint_14/models/user_model.dart';
-import 'package:sprint_14/providers/business_provider/business_provider.dart';
-import 'package:sprint_14/providers/participant_provider/participant_provider.dart';
-import 'package:sprint_14/providers/user_provider/user_provider.dart';
-import 'package:sprint_14/utils/save_send_notification.dart';
+import 'package:digital_munshi/components/app_network_image.dart';
+import 'package:digital_munshi/helpers/app_data.dart';
+import 'package:digital_munshi/models/participant_model.dart';
+import 'package:digital_munshi/models/user_model.dart';
+import 'package:digital_munshi/providers/business_provider/business_provider.dart';
+import 'package:digital_munshi/providers/participant_provider/participant_provider.dart';
+import 'package:digital_munshi/providers/user_provider/user_provider.dart';
+import 'package:digital_munshi/utils/save_send_notification.dart';
 
 class ParticipantsManagementView extends ConsumerStatefulWidget {
   final String businessId;

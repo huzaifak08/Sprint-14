@@ -1,6 +1,6 @@
 import 'package:sqflite/sqflite.dart';
-import 'package:sprint_14/cache/init_cache.dart';
-import 'package:sprint_14/models/notification_model.dart';
+import 'package:digital_munshi/cache/init_cache.dart';
+import 'package:digital_munshi/models/notification_model.dart';
 import 'dart:developer' as dev;
 
 class NotificationTable {

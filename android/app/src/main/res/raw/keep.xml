@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release builds shrink unused resources. These are only referenced by name
+     from Dart (flutter_local_notifications) and the manifest, so keep them. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_stat_notification,@color/notification_accent" />

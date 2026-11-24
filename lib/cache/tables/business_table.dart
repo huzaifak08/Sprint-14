@@ -1,6 +1,6 @@
 import 'package:sqflite/sqflite.dart';
-import 'package:sprint_14/cache/init_cache.dart';
-import 'package:sprint_14/models/business_model.dart';
+import 'package:digital_munshi/cache/init_cache.dart';
+import 'package:digital_munshi/models/business_model.dart';
 
 class BusinessTable {
   static const String tableName = "businesses";

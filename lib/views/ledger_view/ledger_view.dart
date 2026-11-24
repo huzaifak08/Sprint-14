@@ -3,11 +3,11 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:sprint_14/helpers/constants.dart';
-import 'package:sprint_14/helpers/theme_widgets.dart';
-import 'package:sprint_14/models/ledger_model.dart';
-import 'package:sprint_14/providers/ledger_provider/ledger_provider.dart';
-import 'package:sprint_14/views/add_or_update_ledger_view.dart';
+import 'package:digital_munshi/helpers/constants.dart';
+import 'package:digital_munshi/helpers/theme_widgets.dart';
+import 'package:digital_munshi/models/ledger_model.dart';
+import 'package:digital_munshi/providers/ledger_provider/ledger_provider.dart';
+import 'package:digital_munshi/views/add_or_update_ledger_view.dart';
 
 import 'ledger_view_model.dart';
 

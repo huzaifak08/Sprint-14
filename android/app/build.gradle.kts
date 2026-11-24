@@ -16,9 +16,9 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.zaifii.sprint_14"
+    namespace = "com.digitalmunshi.app"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = "27.0.12077973"
+    ndkVersion = "28.2.13676358"
 
     compileOptions {
         isCoreLibraryDesugaringEnabled = true
@@ -26,43 +26,67 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
-    }
-
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.zaifii.sprint_14"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        // Permanent Play Store id: never change it, or updates stop reaching
+        // existing users (the visible name is set in AndroidManifest.xml).
+        applicationId = "com.digitalmunshi.app"
+        // versionCode/versionName come from pubspec.yaml or --build-number /
+        // --build-name (CI derives the code from the run number).
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
+    // Release signing (upload key). Sources, in order:
+    //  1. android/key.properties (local machine; git-ignored), e.g.
+    //       storeFile=upload-keystore.jks   (path relative to android/app)
+    //       storePassword=...  keyAlias=upload  keyPassword=...
+    //  2. Environment variables + android/app/upload-keystore.jks (GitHub
+    //     Actions decodes the keystore from the KEYSTORE_BASE64 secret).
+    // With neither, release builds fall back to the debug key so
+    // `flutter run --release` works locally; Play rejects such uploads, so a
+    // misconfigured CI can't publish a wrongly signed build.
+    val ciKeystore = file("upload-keystore.jks")
+    val hasLocalSigning = keystorePropertiesFile.exists()
+    val hasCiSigning = ciKeystore.exists() && !System.getenv("KEY_ALIAS").isNullOrBlank()
+
     signingConfigs {
         create("release") {
-            // Check if key.properties exists, otherwise use Dart Defines/Environment variables
-            if (keystorePropertiesFile.exists()) {
+            if (hasLocalSigning) {
                 keyAlias = keystoreProperties["keyAlias"] as String
                 keyPassword = keystoreProperties["keyPassword"] as String
                 storeFile = keystoreProperties["storeFile"]?.let { file(it) }
                 storePassword = keystoreProperties["storePassword"] as String
-            } else {
-                // This allows GitHub Actions to inject the values
-                keyAlias = System.getenv("KEY_ALIAS") ?: ""
-                keyPassword = System.getenv("KEY_PASSWORD") ?: ""
-                storeFile = file("upload-keystore.jks")
-                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: ""
+            } else if (hasCiSigning) {
+                keyAlias = System.getenv("KEY_ALIAS")
+                keyPassword = System.getenv("KEY_PASSWORD")
+                storeFile = ciKeystore
+                storePassword = System.getenv("KEYSTORE_PASSWORD")
             }
         }
     }
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")
-            isMinifyEnabled = true 
+            signingConfig =
+                if (hasLocalSigning || hasCiSigning) {
+                    signingConfigs.getByName("release")
+                } else {
+                    logger.warn("No upload key found: signing release with the DEBUG key.")
+                    signingConfigs.getByName("debug")
+                }
+            isMinifyEnabled = true
             isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
 

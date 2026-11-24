@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Logo mark only (transparent), for the Android adaptive-icon foreground
+       and the launch screen. Same shapes as assets/images/logo.svg. -->
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F7D774"/>
+      <stop offset="1" stop-color="#D4A72C"/>
+    </linearGradient>
+    <linearGradient id="page" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E6EEFF"/>
+    </linearGradient>
+    <linearGradient id="bar" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4A8BFF"/>
+      <stop offset="1" stop-color="#2459D8"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(0,-34)">
+    <path d="M512,392 C440,350 330,338 232,360 L232,730 C330,708 440,718 512,762 C584,718 694,708 792,730 L792,360 C694,338 584,350 512,392 Z" fill="url(#gold)"/>
+    <path d="M512,370 C440,326 330,314 250,334 L250,704 C330,684 440,694 512,738 Z" fill="url(#page)"/>
+    <path d="M512,370 C584,326 694,314 774,334 L774,704 C694,684 584,694 512,738 Z" fill="url(#page)"/>
+    <path d="M512,370 L512,738" stroke="#C3D3F4" stroke-width="8" fill="none"/>
+    <g stroke="#8DAEF0" stroke-width="20" stroke-linecap="round" fill="none">
+      <path d="M302,436 L462,452"/>
+      <path d="M302,502 L462,516"/>
+      <path d="M302,568 L462,580"/>
+      <path d="M302,634 L410,642"/>
+    </g>
+    <rect x="566" y="560" width="46" height="112" rx="12" fill="url(#bar)"/>
+    <rect x="632" y="498" width="46" height="174" rx="12" fill="url(#bar)"/>
+    <rect x="698" y="428" width="46" height="244" rx="12" fill="url(#bar)"/>
+  </g>
+</svg>

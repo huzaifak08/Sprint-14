@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sprint_14/models/app_settings_model.dart';
+import 'package:digital_munshi/models/app_settings_model.dart';
 
 void main() {
   test('old saved values still load (0 = light, 1 = dark)', () {

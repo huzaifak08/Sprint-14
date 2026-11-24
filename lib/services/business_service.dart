@@ -1,8 +1,8 @@
 import 'dart:developer' as dev;
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:sprint_14/cache/sync/sync_utils.dart';
-import 'package:sprint_14/helpers/constants.dart';
-import 'package:sprint_14/models/business_model.dart';
+import 'package:digital_munshi/cache/sync/sync_utils.dart';
+import 'package:digital_munshi/helpers/constants.dart';
+import 'package:digital_munshi/models/business_model.dart';
 
 class BusinessService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -49,17 +49,27 @@ class BusinessService {
         name: "BusinessService",
       );
 
-      // Firestore 'whereIn' accepts at most 30 values, so query in chunks.
+      // Fetched doc-by-doc rather than with `whereIn` on the document id:
+      // security rules can't check a document-id query, so it would be
+      // rejected. A business the user lost access to is skipped, not fatal.
       final businesses = <BusinessModel>[];
       for (final chunk in chunked(businessIds)) {
-        final snapshot = await _businessRef
-            .where(FieldPath.documentId, whereIn: chunk)
-            .get();
-        businesses.addAll(
-          snapshot.docs.map(
-            (doc) => BusinessModel.fromMap({...doc.data(), 'id': doc.id}),
-          ),
+        final docs = await Future.wait(
+          chunk.map((id) async {
+            try {
+              return await _businessRef.doc(id).get();
+            } on FirebaseException catch (e) {
+              if (e.code == 'permission-denied') return null;
+              rethrow;
+            }
+          }),
         );
+        for (final doc in docs) {
+          if (doc == null || !doc.exists || doc.data() == null) continue;
+          businesses.add(
+            BusinessModel.fromMap({...doc.data()!, 'id': doc.id}),
+          );
+        }
       }
 
       // Sort locally by design preferences since 'whereIn' cannot be combined easily with dynamic orderBys
@@ -150,7 +160,11 @@ class BusinessService {
     }
   }
 
-  /// Deletes a Business profile from the Cloud
+  /// Deletes a business and everything under it from the cloud: products,
+  /// sales, expenses and staff links, then the business document itself.
+  ///
+  /// Safe to retry: each step deletes whatever is left, and the business
+  /// document goes last so a half-finished delete is retried on next sync.
   Future<bool> deleteBusinessData({required String businessId}) async {
     try {
       dev.log(
@@ -158,12 +172,43 @@ class BusinessService {
         name: "BusinessService",
       );
 
-      await _businessRef.doc(businessId).delete();
+      final businessDoc = _businessRef.doc(businessId);
+      for (final sub in [
+        productsCollection,
+        salesCollection,
+        expensesCollection,
+      ]) {
+        await _deleteAll(businessDoc.collection(sub));
+      }
+      await _deleteAll(
+        _firestore
+            .collection(participantsCollection)
+            .where('businessId', isEqualTo: businessId),
+      );
+
+      await businessDoc.delete();
 
       return true;
     } catch (err) {
       dev.log("Cloud Business Deletion Error: $err", name: "BusinessService");
       return false;
+    }
+  }
+
+  /// Deletes every document matched by [query], in batches.
+  Future<void> _deleteAll(Query<Map<String, dynamic>> query) async {
+    const pageSize = 400; // Firestore batches hold at most 500 writes.
+    while (true) {
+      final snapshot = await query.limit(pageSize).get();
+      if (snapshot.docs.isEmpty) return;
+
+      final batch = _firestore.batch();
+      for (final doc in snapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+
+      if (snapshot.docs.length < pageSize) return;
     }
   }
 

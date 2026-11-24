@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:sprint_14/models/sale_model.dart';
-import 'package:sprint_14/providers/expense_provider/expense_provider.dart'; // 🔥 Import this
-import 'package:sprint_14/views/business_views/business_dashboard_view/business_dashboard_view_model.dart';
+import 'package:digital_munshi/models/sale_model.dart';
+import 'package:digital_munshi/providers/business_provider/business_provider.dart';
+import 'package:digital_munshi/providers/expense_provider/expense_provider.dart'; // 🔥 Import this
+import 'package:digital_munshi/views/business_views/business_dashboard_view/business_dashboard_view_model.dart';
 
 class SummaryCard extends ConsumerWidget {
   final List<SaleModel> sales;
@@ -28,24 +29,22 @@ class SummaryCard extends ConsumerWidget {
       grossProfit += s.profit;
     }
 
-    // 🔥 Calculate total expenses for the visible sales day
-    // (Assuming the dashboard is currently showing a specific date)
-    double totalExpenses = 0;
-    expenseState.whenData((expenses) {
-      if (targetList.isNotEmpty) {
-        final currentDate = targetList.first.dateTime;
-        totalExpenses = expenses
-            .where(
-              (e) =>
-                  e.dateTime.year == currentDate.year &&
-                  e.dateTime.month == currentDate.month &&
-                  e.dateTime.day == currentDate.day,
-            )
-            .fold(0, (sum, e) => sum + e.amount);
-      }
-    });
+    final currency =
+        ref.watch(singleBusinessProvider(businessId)).value?.currency ?? 'PKR';
+    final hasSelection = ui.isSelectionMode && ui.selectedIds.isNotEmpty;
 
-    // 🔥 Actual Net Profit calculation
+    // Expenses for the whole period on screen (even on days with no sales).
+    // A hand-picked selection of sales has no matching expenses, so it shows
+    // gross profit only.
+    double totalExpenses = 0;
+    if (!hasSelection) {
+      totalExpenses = (expenseState.value ?? [])
+          .where(
+            (e) => matchesPeriod(e.dateTime, ui.activeFilter, ui.selectedDate),
+          )
+          .fold(0.0, (sum, e) => sum + e.amount);
+    }
+
     final netProfit = grossProfit - totalExpenses;
 
     return Container(
@@ -75,9 +74,9 @@ class SummaryCard extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    ui.selectedIds.isNotEmpty
-                        ? "SELECTED PROFIT"
-                        : "DAILY NET PROFIT",
+                    hasSelection
+                        ? "SELECTED GROSS PROFIT"
+                        : periodProfitLabel(ui.activeFilter),
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w900,
@@ -87,7 +86,7 @@ class SummaryCard extends ConsumerWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    "Rs. ${netProfit.toStringAsFixed(0)}",
+                    "$currency ${netProfit.toStringAsFixed(0)}",
                     style: TextStyle(
                       fontSize: 32,
                       fontWeight: FontWeight.w900,
@@ -101,6 +100,7 @@ class SummaryCard extends ConsumerWidget {
                 theme,
                 "EXPENSES",
                 totalExpenses,
+                currency: currency,
                 color: Colors.redAccent,
                 crossAxisAlignment: CrossAxisAlignment.end,
               ),
@@ -110,8 +110,14 @@ class SummaryCard extends ConsumerWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _statItem(theme, "REVENUE", revenue),
-              _statItem(theme, "GROSS", grossProfit, color: Colors.green),
+              _statItem(theme, "REVENUE", revenue, currency: currency),
+              _statItem(
+                theme,
+                "GROSS",
+                grossProfit,
+                currency: currency,
+                color: Colors.green,
+              ),
               _statItem(
                 theme,
                 "COUNT",
@@ -131,6 +137,7 @@ class SummaryCard extends ConsumerWidget {
     String label,
     double val, {
     bool isCurrency = true,
+    String currency = 'PKR',
     Color? color,
     CrossAxisAlignment crossAxisAlignment = CrossAxisAlignment.start,
   }) {
@@ -147,7 +154,7 @@ class SummaryCard extends ConsumerWidget {
           ),
         ),
         Text(
-          "${isCurrency ? 'Rs ' : ''}${val.toStringAsFixed(0)}",
+          "${isCurrency ? '$currency ' : ''}${val.toStringAsFixed(0)}",
           style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w900,

@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:sprint_14/components/app_toast.dart';
+import 'package:digital_munshi/components/app_toast.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:sprint_14/components/category_selector.dart';
-import 'package:sprint_14/helpers/app_data.dart';
-import 'package:sprint_14/models/product_model.dart';
-import 'package:sprint_14/models/sale_model.dart';
-import 'package:sprint_14/providers/product_provider/product_provider.dart';
-import 'package:sprint_14/providers/sale_provider/sale_provider.dart';
+import 'package:digital_munshi/components/category_selector.dart';
+import 'package:digital_munshi/helpers/app_data.dart';
+import 'package:digital_munshi/helpers/number_input.dart';
+import 'package:digital_munshi/models/product_model.dart';
+import 'package:digital_munshi/models/sale_model.dart';
+import 'package:digital_munshi/providers/business_provider/business_provider.dart';
+import 'package:digital_munshi/providers/current_user_provider/current_user_provider.dart';
+import 'package:digital_munshi/providers/product_provider/product_provider.dart';
+import 'package:digital_munshi/providers/sale_provider/sale_provider.dart';
+import 'package:digital_munshi/providers/stock_provider/stock_provider.dart';
 
 class AddUpdateSaleView extends ConsumerStatefulWidget {
   final String businessId;
@@ -41,6 +45,15 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
 
   double _profit = 0.0;
 
+  /// New sales move stock. Sales recorded before stock tracking existed
+  /// stay untracked when edited, so hand-counted stock isn't disturbed.
+  bool get _tracksStock => widget.sale?.stockTracked ?? true;
+
+  /// Stock the sale being edited already takes (added back when checking
+  /// how much is available for the edited version).
+  Map<String, double> get _originalStockUse =>
+      widget.sale?.stockEffects ?? const {};
+
   @override
   void initState() {
     super.initState();
@@ -65,66 +78,96 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
 
   void _initializeEditData(List<ProductModel> products) {
     if (_isInitialized || widget.sale == null) return;
+    _isInitialized = true;
 
     final sale = widget.sale!;
-
-    final matchedProducts = products
-        .where((p) => sale.productIds.contains(p.id))
-        .toList();
+    final items = sale.items.isNotEmpty
+        ? sale.items
+        : _legacyItems(sale, products);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
 
       setState(() {
         _basketItems.clear();
-
-        final bool isMultiProduct = matchedProducts.length > 1;
-
-        for (final product in matchedProducts) {
-          final bool isLinear =
-              product.unitType == "Meter" || product.unitType == "Gazz";
-
-          _basketItems.add(
-            _SaleBasketItem(
-              product: product,
-
-              quantity: isMultiProduct ? 1 : sale.quantity,
-
-              measurement: isLinear ? sale.measurement : 1,
-            ),
-          );
-        }
-
-        _billingController.text = sale.soldAtPrice.toStringAsFixed(0);
-
-        _isInitialized = true;
-
+        _basketItems.addAll(items.map(_SaleBasketItem.fromItem));
+        _billingController.text = _fmt(sale.soldAtPrice);
         _recalculate();
       });
     });
   }
 
+  /// Rebuilds lines for a sale recorded before per-item lines existed.
+  /// Only totals were stored then, so quantities are a best guess and the
+  /// cost of products deleted since is shared out from the stored profit,
+  /// keeping the sale's profit unchanged unless the user edits it.
+  List<SaleItem> _legacyItems(SaleModel sale, List<ProductModel> products) {
+    final byId = {for (final p in products) p.id: p};
+    final isMulti = sale.productIds.length > 1;
+    final items = <SaleItem>[];
+    final missing = <int>[];
+
+    for (var i = 0; i < sale.productIds.length; i++) {
+      final id = sale.productIds[i];
+      final product = byId[id];
+      final title = i < sale.productTitles.length
+          ? sale.productTitles[i]
+          : (product?.title ?? 'Unknown item');
+      final unitType = product?.unitType ?? 'Piece';
+      if (product == null) missing.add(items.length);
+      items.add(
+        SaleItem(
+          productId: id,
+          title: title,
+          unitType: unitType,
+          quantity: isMulti ? 1 : sale.quantity,
+          measurement: isLinearUnit(unitType) ? sale.measurement : 1,
+          unitCost: product?.retailPrice ?? 0,
+          unitMsrp: product?.msrpPrice ?? 0,
+          tracksStock: false,
+        ),
+      );
+    }
+
+    if (missing.isNotEmpty) {
+      final knownCost = items.fold<double>(
+        0,
+        (sum, item) => sum + item.totalCost,
+      );
+      final storedCost = sale.soldAtPrice - sale.profit;
+      final share = ((storedCost - knownCost) / missing.length).clamp(
+        0.0,
+        double.infinity,
+      );
+      for (final index in missing) {
+        final item = items[index];
+        final units = item.effectiveQuantity == 0 ? 1 : item.effectiveQuantity;
+        items[index] = SaleItem(
+          productId: item.productId,
+          title: item.title,
+          unitType: item.unitType,
+          quantity: item.quantity,
+          measurement: item.measurement,
+          unitCost: share / units,
+          unitMsrp: share / units,
+          tracksStock: false,
+        );
+      }
+    }
+    return items;
+  }
+
   void _recalculate() {
     double collectiveMsrp = 0;
-
     double collectiveCost = 0;
 
     for (final item in _basketItems) {
-      final qty = double.tryParse(item.qtyController.text) ?? 1;
-
-      final measurement = double.tryParse(item.measurementController.text) ?? 1;
-
-      final bool isLinear =
-          item.product.unitType == "Meter" || item.product.unitType == "Gazz";
-
-      final effectiveQty = isLinear ? qty * measurement : qty;
-
-      collectiveMsrp += item.product.msrpPrice * effectiveQty;
-
-      collectiveCost += item.product.retailPrice * effectiveQty;
+      final line = item.toItem();
+      collectiveMsrp += line.totalMsrp;
+      collectiveCost += line.totalCost;
     }
 
-    final billing = double.tryParse(_billingController.text) ?? 0;
+    final billing = parseAmount(_billingController.text) ?? 0;
 
     setState(() {
       _totalMSRP = collectiveMsrp;
@@ -154,45 +197,96 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
     });
   }
 
-  void _submit() {
-    if (_basketItems.isEmpty) return;
+  /// Stock left for [productId] for this sale: what's on hand plus what
+  /// the sale being edited already took.
+  double _allowedStock(String productId, Map<String, double> levels) {
+    return (levels[productId] ?? 0) + (_originalStockUse[productId] ?? 0);
+  }
 
-    final totalQuantity = _basketItems.fold<double>(0, (sum, item) {
-      final qty = double.tryParse(item.qtyController.text) ?? 1;
+  /// Basket lines that need more stock than is left.
+  List<String> _stockShortfalls(Map<String, double> levels) {
+    if (!_tracksStock) return const [];
+    final shortfalls = <String>[];
+    for (final item in _basketItems) {
+      if (!item.tracksStock) continue;
+      final needed = item.toItem().effectiveQuantity;
+      final allowed = _allowedStock(item.productId, levels);
+      if (needed > allowed + 1e-9) {
+        shortfalls.add(
+          "${item.title}: needs ${_fmt(needed)}, only "
+          "${_fmt(allowed < 0 ? 0 : allowed)} left",
+        );
+      }
+    }
+    return shortfalls;
+  }
 
-      return sum + qty;
-    });
+  /// Returns an error message, or null when the form can be saved.
+  String? _validate() {
+    if (_basketItems.isEmpty) return "Add at least one product.";
+    for (final item in _basketItems) {
+      final qty = parseAmount(item.qtyController.text);
+      if (qty == null || qty <= 0) {
+        return "Enter a quantity above 0 for ${item.title}.";
+      }
+      if (item.isLinear) {
+        final m = parseAmount(item.measurementController.text);
+        if (m == null || m <= 0) {
+          return "Enter a measurement above 0 for ${item.title}.";
+        }
+      }
+    }
+    final billing = parseAmount(_billingController.text);
+    if (billing == null || billing <= 0) {
+      return "Enter the total bill (above 0).";
+    }
+    return null;
+  }
 
-    final firstLinearItem = _basketItems.cast<_SaleBasketItem?>().firstWhere(
-      (e) =>
-          e != null &&
-          (e.product.unitType == "Meter" || e.product.unitType == "Gazz"),
-      orElse: () => null,
-    );
+  Future<void> _submit(Map<String, double> stockLevels) async {
+    final error = _validate();
+    if (error != null) {
+      AppToast.error(error);
+      return;
+    }
 
-    final measurement = firstLinearItem == null
-        ? 1.0
-        : (double.tryParse(firstLinearItem.measurementController.text) ?? 1.0);
+    final shortfalls = _stockShortfalls(stockLevels);
+    if (shortfalls.isNotEmpty && !await _confirmOverStock(shortfalls)) {
+      return;
+    }
+    if (!mounted) return;
+
+    final items = _basketItems.map((e) => e.toItem()).toList();
+    final firstLinear = items.where((i) => i.isLinear).firstOrNull;
+    final billing = parseAmount(_billingController.text)!;
+    final uid = ref.read(currentUserProvider).value?.uid ?? '';
 
     final sale = SaleModel(
       id: _isEditMode ? widget.sale!.id : AppData.shared.uuid.v4(),
       businessId: widget.businessId,
-      productIds: _basketItems.map((e) => e.product.id).toList(),
-      productTitles: _basketItems.map((e) => e.product.title).toList(),
-      soldAtPrice: double.tryParse(_billingController.text) ?? 0,
-      profit: _profit,
-      quantity: totalQuantity,
-      measurement: measurement,
+      productIds: items.map((e) => e.productId).toList(),
+      productTitles: items.map((e) => e.title).toList(),
+      soldAtPrice: billing,
+      profit: billing - items.fold<double>(0, (s, i) => s + i.totalCost),
+      // Totals kept for older app versions that don't read `items`.
+      quantity: items.fold<double>(0, (s, i) => s + i.quantity),
+      measurement: firstLinear?.measurement ?? 1.0,
       dateTime: _selectedDate,
+      items: items,
+      recordedById: (_isEditMode && widget.sale!.recordedById.isNotEmpty)
+          ? widget.sale!.recordedById
+          : uid,
+      stockTracked: _tracksStock,
       isSynced: false,
       isDeleted: false,
     );
 
     if (_isEditMode) {
-      ref.read(saleProvider(widget.businessId).notifier).updateSale(sale);
+      await ref.read(saleProvider(widget.businessId).notifier).updateSale(sale);
     } else {
-      ref.read(saleProvider(widget.businessId).notifier).recordSale(sale);
+      await ref.read(saleProvider(widget.businessId).notifier).recordSale(sale);
     }
+    if (!mounted) return;
 
     if (_saveAndAddAnother && !_isEditMode) {
       _resetForm();
@@ -205,11 +299,46 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
     Navigator.pop(context);
   }
 
+  Future<bool> _confirmOverStock(List<String> shortfalls) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text("Not enough stock"),
+        content: Text(
+          "${shortfalls.join('\n')}\n\nRecord the sale anyway? Stock will "
+          "go below zero until you correct it in the product.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("CANCEL"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("RECORD ANYWAY"),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
+  String get _currency =>
+      ref.watch(singleBusinessProvider(widget.businessId)).value?.currency ??
+      'PKR';
+
+  static String _fmt(double v) =>
+      v % 1 == 0 ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
     final productState = ref.watch(productProvider(widget.businessId));
+    final stockLevels =
+        ref.watch(stockLevelsProvider(widget.businessId)).value ??
+        const <String, double>{};
 
     productState.whenData((products) => _initializeEditData(products));
 
@@ -221,7 +350,11 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
         error: (e, _) => Center(child: Text("Error: $e")),
         data: (products) {
           final filteredProducts = products
-              .where((p) => p.isTheya == _isTheyaFilter && p.isAvailableForSale)
+              .where(
+                (p) =>
+                    p.isTheya == _isTheyaFilter &&
+                    p.isAvailableForSale(stockLevels[p.id] ?? p.currentStock),
+              )
               .toList();
 
           return Column(
@@ -252,18 +385,20 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
                     _ProductDropdown(
                       key: ValueKey(_isTheyaFilter),
                       products: filteredProducts,
-                      selectedProducts: _basketItems
-                          .map((e) => e.product)
-                          .toList(),
+                      selectedIds: _basketItems
+                          .map((e) => e.productId)
+                          .toSet(),
                       onSelected: (product) {
                         final exists = _basketItems.any(
-                          (e) => e.product.id == product.id,
+                          (e) => e.productId == product.id,
                         );
 
                         if (exists) return;
 
                         setState(() {
-                          _basketItems.add(_SaleBasketItem(product: product));
+                          _basketItems.add(
+                            _SaleBasketItem.fromProduct(product),
+                          );
 
                           if (_basketItems.length == 1) {
                             _billingController.text = product.msrpPrice
@@ -277,7 +412,7 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
 
                     _buildSectionLabel("BASKET"),
 
-                    _buildBasket(theme),
+                    _buildBasket(theme, stockLevels),
 
                     _buildSectionLabel("COLLECTIVE BILLING"),
 
@@ -294,7 +429,7 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
                 ),
               ),
 
-              _buildSubmitButton(theme),
+              _buildSubmitButton(theme, stockLevels),
             ],
           );
         },
@@ -415,7 +550,7 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
     );
   }
 
-  Widget _buildBasket(ThemeData theme) {
+  Widget _buildBasket(ThemeData theme, Map<String, double> stockLevels) {
     if (_basketItems.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(20),
@@ -434,10 +569,10 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
 
     return Column(
       children: _basketItems.map((item) {
-        final product = item.product;
-
-        final bool isLinear =
-            product.unitType == "Meter" || product.unitType == "Gazz";
+        final bool isLinear = item.isLinear;
+        final showStock = _tracksStock && item.tracksStock;
+        final allowed = _allowedStock(item.productId, stockLevels);
+        final short = showStock && item.toItem().effectiveQuantity > allowed;
 
         return Container(
           margin: const EdgeInsets.only(bottom: 14),
@@ -454,12 +589,27 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
               Row(
                 children: [
                   Expanded(
-                    child: Text(
-                      product.title.toUpperCase(),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 12,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.title.toUpperCase(),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 12,
+                          ),
+                        ),
+                        if (showStock)
+                          Text(
+                            "IN STOCK: ${_fmt(allowed < 0 ? 0 : allowed)}"
+                            "${isLinear ? ' ${item.unitType}' : ''}",
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              color: short ? Colors.red : Colors.grey,
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                   GestureDetector(
@@ -508,7 +658,7 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
                       child: _inputCard(
                         theme,
                         label:
-                            "MEASUREMENT (${product.unitType.toUpperCase()})",
+                            "MEASUREMENT (${item.unitType.toUpperCase()})",
                         controller: item.measurementController,
                         onChanged: (_) => _recalculate(),
                       ),
@@ -534,7 +684,7 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
                           ),
                         ),
                         Text(
-                          "${item.measurementController.text} ${product.unitType}",
+                          "${item.measurementController.text} ${item.unitType}",
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             color: theme.colorScheme.primary,
@@ -546,8 +696,7 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
                     Slider(
                       value: (() {
                         final parsed =
-                            double.tryParse(item.measurementController.text) ??
-                            1;
+                            parseAmount(item.measurementController.text) ?? 1;
 
                         return parsed.clamp(0.25, 20.0);
                       })(),
@@ -583,7 +732,7 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
   Widget _buildBillingField(ThemeData theme) {
     return _inputCard(
       theme,
-      label: "TOTAL BILLING (PKR)",
+      label: "TOTAL BILLING ($_currency)",
       controller: _billingController,
       onChanged: (_) => _recalculate(),
     );
@@ -617,21 +766,7 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
           TextField(
             controller: controller,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            onChanged: (value) {
-              if (label.contains("MEASUREMENT")) {
-                final parsed = double.tryParse(value);
-
-                if (parsed == null || parsed <= 0) {
-                  controller.text = "0.25";
-
-                  controller.selection = TextSelection.fromPosition(
-                    TextPosition(offset: controller.text.length),
-                  );
-                }
-              }
-
-              onChanged(value);
-            },
+            onChanged: onChanged,
             style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
             decoration: const InputDecoration(
               border: InputBorder.none,
@@ -667,7 +802,7 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
                 ),
               ),
               Text(
-                "Rs. ${_totalMSRP.toStringAsFixed(0)}",
+                "$_currency ${_totalMSRP.toStringAsFixed(0)}",
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
@@ -683,12 +818,12 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
             children: [
               _statBlock(
                 "YOUR COST",
-                "Rs. ${_totalCost.toStringAsFixed(0)}",
+                "$_currency ${_totalCost.toStringAsFixed(0)}",
                 theme.colorScheme.onSurface,
               ),
               _statBlock(
                 healthy ? "NET PROFIT" : "NET LOSS",
-                "Rs. ${_profit.toStringAsFixed(0)}",
+                "$_currency ${_profit.toStringAsFixed(0)}",
                 healthy ? Colors.green : Colors.red,
               ),
             ],
@@ -742,7 +877,7 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
     );
   }
 
-  Widget _buildSubmitButton(ThemeData theme) {
+  Widget _buildSubmitButton(ThemeData theme, Map<String, double> stockLevels) {
     return Container(
       padding: EdgeInsets.fromLTRB(
         20,
@@ -754,7 +889,7 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
         width: double.infinity,
         height: 58,
         child: ElevatedButton(
-          onPressed: _basketItems.isEmpty ? null : _submit,
+          onPressed: _basketItems.isEmpty ? null : () => _submit(stockLevels),
           style: ElevatedButton.styleFrom(
             backgroundColor: theme.colorScheme.primary,
             foregroundColor: Colors.white,
@@ -787,15 +922,27 @@ class _AddUpdateSaleViewState extends ConsumerState<AddUpdateSaleView> {
   }
 }
 
+/// One editable basket line. Prices are a snapshot: taken from the product
+/// when it is added, or from the saved sale when editing.
 class _SaleBasketItem {
-  final ProductModel product;
+  final String productId;
+  final String title;
+  final String unitType;
+  final double unitCost;
+  final double unitMsrp;
+  final bool tracksStock;
 
   final TextEditingController qtyController;
 
   final TextEditingController measurementController;
 
   _SaleBasketItem({
-    required this.product,
+    required this.productId,
+    required this.title,
+    required this.unitType,
+    required this.unitCost,
+    required this.unitMsrp,
+    required this.tracksStock,
     double quantity = 1,
     double measurement = 1,
   }) : qtyController = TextEditingController(
@@ -804,6 +951,47 @@ class _SaleBasketItem {
        measurementController = TextEditingController(
          text: measurement.toStringAsFixed(2),
        );
+
+  factory _SaleBasketItem.fromProduct(ProductModel product) {
+    return _SaleBasketItem(
+      productId: product.id,
+      title: product.title,
+      unitType: product.unitType,
+      unitCost: product.retailPrice,
+      unitMsrp: product.msrpPrice,
+      tracksStock: product.tracksStock,
+    );
+  }
+
+  factory _SaleBasketItem.fromItem(SaleItem item) {
+    return _SaleBasketItem(
+      productId: item.productId,
+      title: item.title,
+      unitType: item.unitType,
+      unitCost: item.unitCost,
+      unitMsrp: item.unitMsrp,
+      tracksStock: item.tracksStock,
+      quantity: item.quantity,
+      measurement: item.measurement,
+    );
+  }
+
+  bool get isLinear => isLinearUnit(unitType);
+
+  SaleItem toItem() {
+    return SaleItem(
+      productId: productId,
+      title: title,
+      unitType: unitType,
+      quantity: parseAmount(qtyController.text) ?? 0,
+      measurement: isLinear
+          ? (parseAmount(measurementController.text) ?? 0)
+          : 1,
+      unitCost: unitCost,
+      unitMsrp: unitMsrp,
+      tracksStock: tracksStock,
+    );
+  }
 
   void dispose() {
     qtyController.dispose();
@@ -814,14 +1002,14 @@ class _SaleBasketItem {
 class _ProductDropdown extends StatefulWidget {
   final List<ProductModel> products;
 
-  final List<ProductModel> selectedProducts;
+  final Set<String> selectedIds;
 
   final Function(ProductModel) onSelected;
 
   const _ProductDropdown({
     super.key,
     required this.products,
-    required this.selectedProducts,
+    required this.selectedIds,
     required this.onSelected,
   });
 
@@ -856,9 +1044,7 @@ class _ProductDropdownState extends State<_ProductDropdown> {
         prefixIcon: const Icon(Icons.add_shopping_cart_rounded),
       ),
       items: products.map((p) {
-        final alreadySelected = widget.selectedProducts.any(
-          (e) => e.id == p.id,
-        );
+        final alreadySelected = widget.selectedIds.contains(p.id);
 
         return DropdownMenuItem<ProductModel>(
           value: p,

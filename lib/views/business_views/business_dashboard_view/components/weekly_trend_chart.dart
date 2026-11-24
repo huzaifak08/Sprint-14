@@ -1,29 +1,25 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
-import 'package:sprint_14/models/sale_model.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:digital_munshi/models/sale_model.dart';
+import 'package:digital_munshi/views/business_views/business_dashboard_view/business_dashboard_view_model.dart';
 
-class WeeklyTrendChart extends StatelessWidget {
+/// Revenue over the period chosen on the dashboard (see [revenueTrend]).
+class WeeklyTrendChart extends ConsumerWidget {
+  /// Search-filtered sales from every date; the chart picks its own range.
   final List<SaleModel> sales;
   const WeeklyTrendChart({super.key, required this.sales});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final Map<int, double> weeklyData = {};
-    for (int i = 0; i < 7; i++) {
-      weeklyData[DateTime.now().subtract(Duration(days: i)).weekday] = 0;
-    }
-    for (var s in sales) {
-      if (weeklyData.containsKey(s.dateTime.weekday)) {
-        weeklyData[s.dateTime.weekday] =
-            weeklyData[s.dateTime.weekday]! + s.soldAtPrice;
-      }
-    }
+    final ui = ref.watch(dashboardUiProvider);
+    final points = revenueTrend(sales, ui.activeFilter, ui.selectedDate);
 
-    final spots = weeklyData.entries
-        .map((e) => FlSpot(e.key.toDouble(), e.value))
-        .toList();
-    spots.sort((a, b) => a.x.compareTo(b.x));
+    final spots = [
+      for (var i = 0; i < points.length; i++)
+        FlSpot(i.toDouble(), points[i].revenue),
+    ];
 
     return Container(
       height: 200,
@@ -39,8 +35,8 @@ class WeeklyTrendChart extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            "REVENUE TREND",
-            style: TextStyle(
+            trendTitle(ui.activeFilter),
+            style: const TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.w900,
               letterSpacing: 1.5,
@@ -49,27 +45,38 @@ class WeeklyTrendChart extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           Expanded(
-            child: LineChart(
-              LineChartData(
-                gridData: const FlGridData(show: false),
-                titlesData: const FlTitlesData(show: false),
-                borderData: FlBorderData(show: false),
-                lineBarsData: [
-                  LineChartBarData(
-                    spots: spots,
-                    isCurved: true,
-                    color: theme.colorScheme.primary,
-                    barWidth: 4,
-                    isStrokeCapRound: true,
-                    dotData: const FlDotData(show: false),
-                    belowBarData: BarAreaData(
-                      show: true,
-                      color: theme.colorScheme.primary.withValues(alpha: 0.1),
+            child: spots.length < 2
+                ? const Center(
+                    child: Text(
+                      "Not enough data yet",
+                      style: TextStyle(color: Colors.grey, fontSize: 12),
+                    ),
+                  )
+                : LineChart(
+                    LineChartData(
+                      minY: 0,
+                      gridData: const FlGridData(show: false),
+                      titlesData: const FlTitlesData(show: false),
+                      borderData: FlBorderData(show: false),
+                      lineBarsData: [
+                        LineChartBarData(
+                          spots: spots,
+                          isCurved: true,
+                          preventCurveOverShooting: true,
+                          color: theme.colorScheme.primary,
+                          barWidth: 4,
+                          isStrokeCapRound: true,
+                          dotData: const FlDotData(show: false),
+                          belowBarData: BarAreaData(
+                            show: true,
+                            color: theme.colorScheme.primary.withValues(
+                              alpha: 0.1,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
-            ),
           ),
         ],
       ),

@@ -1,21 +1,22 @@
 import 'dart:async';
+import 'package:digital_munshi/helpers/constants.dart';
 import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
-import 'package:sprint_14/cache/sync/pending_sync.dart';
+import 'package:digital_munshi/cache/sync/pending_sync.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:sprint_14/clients/notifications/notification_cloud_service.dart';
-import 'package:sprint_14/providers/biometric_provider/biometric_provider.dart';
-import 'package:sprint_14/providers/notification_provider/notification_provider.dart';
-import 'package:sprint_14/services/biometric_service.dart';
-import 'package:sprint_14/views/add_or_update_ledger_view.dart';
-import 'package:sprint_14/views/business_views/business_view.dart';
-import 'package:sprint_14/views/event_ledgers_views/event_ledgers_view.dart';
-import 'package:sprint_14/views/ledger_view/ledger_view.dart';
-import 'package:sprint_14/views/notifications_view.dart';
-import 'package:sprint_14/views/settings_view.dart';
+import 'package:digital_munshi/clients/notifications/notification_cloud_service.dart';
+import 'package:digital_munshi/providers/biometric_provider/biometric_provider.dart';
+import 'package:digital_munshi/providers/notification_provider/notification_provider.dart';
+import 'package:digital_munshi/services/biometric_service.dart';
+import 'package:digital_munshi/views/add_or_update_ledger_view.dart';
+import 'package:digital_munshi/views/business_views/business_view.dart';
+import 'package:digital_munshi/views/event_ledgers_views/event_ledgers_view.dart';
+import 'package:digital_munshi/views/ledger_view/ledger_view.dart';
+import 'package:digital_munshi/views/notifications_view.dart';
+import 'package:digital_munshi/views/settings_view.dart';
 
 class HomeView extends ConsumerStatefulWidget {
   const HomeView({super.key});
@@ -50,6 +51,7 @@ class _HomeViewState extends ConsumerState<HomeView>
     // ref.watch(appDataProvider).value;
 
     requestExactAlarmPermission();
+    _notificationService.createDefaultChannel();
     _notificationService.requestNotificationPermission();
     _notificationService.handleForegroundNotifications(context);
     _notificationService.setUpInteractMessage(context);
@@ -179,7 +181,7 @@ class _HomeViewState extends ConsumerState<HomeView>
             ),
             const SizedBox(height: 24),
             Text(
-              "Sprint14 Secured",
+              "$appName is locked",
               style: appTheme.textTheme.headlineSmall?.copyWith(
                 fontWeight: FontWeight.bold,
                 letterSpacing: 1.2,
@@ -221,7 +223,7 @@ class _HomeViewState extends ConsumerState<HomeView>
     return Scaffold(
       appBar: AppBar(
         elevation: 0,
-        title: const Text('Sprint14'),
+        title: const Text(appName),
         titleSpacing: 10,
         leading: Padding(
           padding: const EdgeInsets.only(left: 10),

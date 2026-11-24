@@ -1,5 +1,5 @@
-import 'package:sprint_14/models/event_participant_model.dart';
-import 'package:sprint_14/models/event_transaction_model.dart';
+import 'package:digital_munshi/models/event_participant_model.dart';
+import 'package:digital_munshi/models/event_transaction_model.dart';
 
 /// Payer id used for expenses paid from the common pool.
 const String commonPoolId = 'COMMON_POOL';

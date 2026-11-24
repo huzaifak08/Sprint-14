@@ -1,17 +1,18 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:digital_munshi/helpers/constants.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:sprint_14/cache/cache_owner.dart';
-import 'package:sprint_14/cache/init_cache.dart';
-import 'package:sprint_14/helpers/app_data.dart';
-import 'package:sprint_14/helpers/theme.dart';
-import 'package:sprint_14/providers/app_provider_container.dart';
-import 'package:sprint_14/providers/auth_provider/auth_provider.dart';
-import 'package:sprint_14/providers/settings_provider/settings_provider.dart';
-import 'package:sprint_14/services/routes_service.dart';
-import 'package:sprint_14/views/auth/sign_in_view.dart';
+import 'package:digital_munshi/cache/cache_owner.dart';
+import 'package:digital_munshi/cache/init_cache.dart';
+import 'package:digital_munshi/helpers/app_data.dart';
+import 'package:digital_munshi/helpers/theme.dart';
+import 'package:digital_munshi/providers/app_provider_container.dart';
+import 'package:digital_munshi/providers/auth_provider/auth_provider.dart';
+import 'package:digital_munshi/providers/settings_provider/settings_provider.dart';
+import 'package:digital_munshi/services/routes_service.dart';
+import 'package:digital_munshi/views/auth/sign_in_view.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
@@ -69,7 +70,7 @@ class MyApp extends ConsumerWidget {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
           navigatorKey: AppData.shared.navigatorKey,
-          title: 'Sprint14',
+          title: appName,
           theme: lightTheme,
           darkTheme: darkTheme,
           themeMode: config.themeMode,

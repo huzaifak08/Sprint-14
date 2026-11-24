@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:sprint_14/models/expense_model.dart';
-import 'package:sprint_14/providers/expense_provider/expense_provider.dart';
-import 'package:sprint_14/views/business_views/expense_view/components/add_expense_sheet.dart';
-import 'package:sprint_14/views/business_views/expense_view/components/expense_tile.dart';
+import 'package:digital_munshi/models/expense_model.dart';
+import 'package:digital_munshi/providers/business_provider/business_provider.dart';
+import 'package:digital_munshi/providers/expense_provider/expense_provider.dart';
+import 'package:digital_munshi/views/business_views/expense_view/components/add_expense_sheet.dart';
+import 'package:digital_munshi/views/business_views/expense_view/components/expense_tile.dart';
 
 class ExpenseView extends ConsumerStatefulWidget {
   final String businessId;
@@ -127,7 +128,7 @@ class _ExpenseViewState extends ConsumerState<ExpenseView> {
           ),
           const SizedBox(height: 8),
           Text(
-            "PKR ${total.toStringAsFixed(0)}",
+            "${ref.watch(singleBusinessProvider(widget.businessId)).value?.currency ?? 'PKR'} ${total.toStringAsFixed(0)}",
             style: TextStyle(
               color: theme.colorScheme.onPrimary,
               fontSize: 30,
