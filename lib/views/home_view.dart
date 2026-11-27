@@ -10,12 +10,14 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:digital_munshi/clients/notifications/notification_cloud_service.dart';
 import 'package:digital_munshi/providers/biometric_provider/biometric_provider.dart';
 import 'package:digital_munshi/providers/notification_provider/notification_provider.dart';
+import 'package:digital_munshi/providers/project_provider/project_provider.dart';
 import 'package:digital_munshi/services/biometric_service.dart';
 import 'package:digital_munshi/views/add_or_update_ledger_view.dart';
 import 'package:digital_munshi/views/business_views/business_view.dart';
 import 'package:digital_munshi/views/event_ledgers_views/event_ledgers_view.dart';
 import 'package:digital_munshi/views/ledger_view/ledger_view.dart';
 import 'package:digital_munshi/views/notifications_view.dart';
+import 'package:digital_munshi/views/projects_views/projects_view.dart';
 import 'package:digital_munshi/views/settings_view.dart';
 
 class HomeView extends ConsumerStatefulWidget {
@@ -230,6 +232,15 @@ class _HomeViewState extends ConsumerState<HomeView>
           child: SvgPicture.asset("assets/images/logo.svg"),
         ),
         actions: [
+          if (ref.watch(isAppOwnerProvider))
+            IconButton(
+              tooltip: "Projects",
+              icon: const Icon(Icons.rocket_launch_outlined),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ProjectsView()),
+              ),
+            ),
           _buildNotificationButton(),
           IconButton(
             icon: const Icon(Icons.settings_outlined),

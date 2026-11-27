@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 // App identity (Play Store / bundle id: com.digitalmunshi.app).
 const String appName = 'Digital Munshi';
 
+// The only account that sees owner tools (the Projects screen).
+const String appOwnerEmail = 'huzaifa.uno@gmail.com';
+
 // Firestore Collections:
 final String usersCollection = "users";
 final String projectsCollection = "projects";

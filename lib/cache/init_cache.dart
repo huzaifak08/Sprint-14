@@ -8,6 +8,7 @@ import 'package:digital_munshi/cache/tables/ledger_table.dart';
 import 'package:digital_munshi/cache/tables/notification_table.dart';
 import 'package:digital_munshi/cache/tables/participant_table.dart';
 import 'package:digital_munshi/cache/tables/product_table.dart';
+import 'package:digital_munshi/cache/tables/project_table.dart';
 import 'package:digital_munshi/cache/tables/sale_table.dart';
 import 'package:digital_munshi/cache/tables/settings_table.dart';
 import 'package:digital_munshi/cache/tables/settlement_milestone_table.dart';
@@ -34,9 +35,9 @@ class LocalCacheManager {
 
     return openDatabase(
       path,
-      version: 19, // Increment version number when schema changes
+      version: 20, // Increment version number when schema changes
       onCreate: (db, version) async {
-        // await ProjectTable.createTable(db);
+        await ProjectTable.createTable(db);
         await LedgerTable.createTable(db);
         await UserTable.createTable(db);
         await BusinessTable.createTable(db);
@@ -121,6 +122,11 @@ class LocalCacheManager {
           await ProductTable.migrateV19(db);
           await ExpenseTable.migrateV19(db);
           dev.log("v19- Sale items, stock tracking and business indexes");
+        }
+
+        if (oldVersion < 20) {
+          await ProjectTable.createTable(db);
+          dev.log("v20- Projects table created");
         }
       },
     );
@@ -224,6 +230,7 @@ class LocalCacheManager {
     'event_participants',
     'event_transactions',
     'settlement_milestones',
+    ProjectTable.tableName,
   ];
 
   /// True if any table still has changes that haven't reached the cloud.

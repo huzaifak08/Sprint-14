@@ -64,6 +64,11 @@ service cloud.firestore {
         allow read, write: if signedIn() && uid() == userId;
       }
 
+      // Client projects (owner-only Projects screen).
+      match /projects/{projectId} {
+        allow read, write: if signedIn() && uid() == userId;
+      }
+
       match /notifications/{notificationId} {
         allow read, update, delete: if signedIn() && uid() == userId;
         // Anyone signed in can send a notification to this user, but it

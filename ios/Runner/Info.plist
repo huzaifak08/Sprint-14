@@ -3,9 +3,9 @@
 <plist version="1.0">
 	<dict>
 		<key>NSPhotoLibraryUsageDescription</key>
-		<string>Choose a profile picture from your photos.</string>
+		<string>Choose photos for your profile picture or to scan backup codes.</string>
 		<key>NSCameraUsageDescription</key>
-		<string>Take a profile picture with your camera.</string>
+		<string>Take photos for your profile picture or to scan backup codes.</string>
 		<key>CFBundleDevelopmentRegion</key>
 		<string>$(DEVELOPMENT_LANGUAGE)</string>
 		<key>CFBundleDisplayName</key>

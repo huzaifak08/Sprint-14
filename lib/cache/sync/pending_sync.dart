@@ -5,6 +5,7 @@ import 'package:digital_munshi/cache/sync/sync_utils.dart';
 import 'package:digital_munshi/cache/tables/expense_table.dart';
 import 'package:digital_munshi/cache/tables/participant_table.dart';
 import 'package:digital_munshi/cache/tables/product_table.dart';
+import 'package:digital_munshi/cache/tables/project_table.dart';
 import 'package:digital_munshi/cache/tables/sale_table.dart';
 import 'package:digital_munshi/providers/business_provider/business_provider.dart';
 import 'package:digital_munshi/providers/event_ledger_provider/event_ledger_provider.dart';
@@ -13,6 +14,7 @@ import 'package:digital_munshi/providers/ledger_provider/ledger_provider.dart';
 import 'package:digital_munshi/providers/notification_provider/notification_provider.dart';
 import 'package:digital_munshi/providers/participant_provider/participant_provider.dart';
 import 'package:digital_munshi/providers/product_provider/product_provider.dart';
+import 'package:digital_munshi/providers/project_provider/project_provider.dart';
 import 'package:digital_munshi/providers/sale_provider/sale_provider.dart';
 
 /// Pushes every pending local change to the cloud (best effort).
@@ -44,6 +46,13 @@ Future<void> syncAllPending(ProviderReader read) async {
   await safe('notifications', () {
     return read(notificationProvider.notifier).syncPendingNotifications();
   });
+  // Only the owner account ever has project rows; skip the provider (and
+  // its live cloud listener) for everyone else.
+  if (await ProjectTable.hasUnsynced()) {
+    await safe('projects', () {
+      return read(projectProvider.notifier).syncPending();
+    });
+  }
 
   // Per-business data: only touch businesses that actually have pending rows.
   final saleIds = await _pendingBusinessIds(SaleTable.tableName);
