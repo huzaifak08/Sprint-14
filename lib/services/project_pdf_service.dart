@@ -540,7 +540,8 @@ class ProjectPdfService {
     padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 6),
     decoration: pw.BoxDecoration(
       color: PdfColors.white,
-      borderRadius: pw.BorderRadius.circular(20),
+      // At most half the pill's height: larger radii render with spikes.
+      borderRadius: pw.BorderRadius.circular(10),
     ),
     child: pw.Text(
       text,
